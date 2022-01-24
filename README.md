@@ -19,6 +19,9 @@ container image in a local folder.
 
 ___
 
+* [Install](#install)
+  * [Binary](#binary)
+  * [Docker image](#docker-image)
 * [Usage](#usage)
   * [Minimal](#minimal)
   * [Extract for all architectures](#extract-for-all-architectures)
@@ -27,6 +30,22 @@ ___
 * [Build](#build)
 * [Contributing](#contributing)
 * [License](#license)
+
+## Install
+
+### Binary
+
+Undock binaries are available on the [GitHub releases page](https://github.com/crazy-max/undock/releases).
+
+After downloading and extracting the archive matching your platform, it can be
+tested with the `./undock --help` command and moved to a permanent location.
+
+### Docker image
+
+| Registry                                                                                           | Image                         |
+|----------------------------------------------------------------------------------------------------|-------------------------------|
+| [Docker Hub](https://hub.docker.com/r/crazymax/undock/)                                            | `crazymax/undock`             |
+| [GitHub Container Registry](https://github.com/users/crazy-max/packages/container/package/undock)  | `ghcr.io/crazy-max/undock`    |
 
 ## Usage
 
