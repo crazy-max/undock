@@ -1,0 +1,8 @@
+/.idea
+/*.iml
+
+/.dev
+/bin
+/dist
+/site
+/coverage.txt
