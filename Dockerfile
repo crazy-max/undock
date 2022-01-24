@@ -19,11 +19,11 @@ EOT
 
 FROM vendored AS test
 ENV CGO_ENABLED=1
-RUN apk add --no-cache gcc linux-headers musl-dev
+RUN apk add --no-cache gcc linux-headers musl-dev pkgconf
 RUN --mount=type=bind,target=. \
   --mount=type=cache,target=/go/pkg/mod \
   --mount=type=cache,target=/root/.cache/go-build <<EOT
-go test -v -coverprofile=/tmp/coverage.txt -covermode=atomic -race ./...
+go test -tags="containers_image_openpgp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper" -v -coverprofile=/tmp/coverage.txt -covermode=atomic -race ./...
 go tool cover -func=/tmp/coverage.txt
 EOT
 
@@ -39,7 +39,7 @@ RUN --mount=type=bind,target=. \
     --name "undock" \
     --dist "/out" \
     --main="./cmd" \
-    --tags="containers_image_openpgp" \
+    --tags="containers_image_openpgp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper" \
     --flags="-trimpath" \
     --ldflags="-s -w -X 'main.version={{.Version}}'" \
     --files="CHANGELOG.md" \
