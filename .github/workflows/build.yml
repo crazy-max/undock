@@ -74,12 +74,11 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
             type=ref,event=pr
             type=edge
           labels: |
             org.opencontainers.image.title=Undock
-            org.opencontainers.image.description=Docker image update notifier
+            org.opencontainers.image.description=Extract contents of a container image in a local folder
             org.opencontainers.image.vendor=CrazyMax
       -
         name: Set up QEMU
