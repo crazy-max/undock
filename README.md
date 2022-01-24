@@ -49,7 +49,7 @@ tested with the `./undock --help` command and moved to a permanent location.
 
 ## Usage
 
-```shell
+```text
 $ undock --help
 Usage: undock <source> <dist>
 
@@ -77,7 +77,7 @@ Flags:
 
 ### Minimal
 
-```shell
+```text
 $ undock --rm-dist crazymax/buildx-pkg:latest ./dist
 $ tree ./dist
 ./dist
@@ -104,7 +104,7 @@ $ tree ./dist
 
 You can extract for all architectures if source image is a manifest list:
 
-```shell
+```text
 $ undock --rm-dist --all crazymax/buildx-pkg:latest ./dist
 $ tree ./dist
 ./dist
@@ -140,7 +140,7 @@ $ tree ./dist
 
 For a manifest list, merge output in dist folder:
 
-```shell
+```text
 $ undock --wrap --rm-dist --all crazymax/buildx-pkg:latest ./dist
 $ tree ./dist
 ./dist
@@ -172,7 +172,7 @@ $ tree ./dist
 It can be useful to extract contents of a specific subset of files/dirs if the
 source image is not a scratch one.
 
-```shell
+```text
 $ undock --include /usr/local/bin --rm-dist --all crazymax/diun:latest ./dist
 $ tree ./dist
 ./dist
