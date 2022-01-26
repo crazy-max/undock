@@ -368,7 +368,7 @@ You can also use the [official Docker image](../install/docker.md):
 $ docker run --rm -t \
   -v $(pwd)/dist:/dist \
   crazymax/undock:latest \
-    --include /usr/local/bin --all crazymax/diun:latest ./dist
+    --include /usr/local/bin --all crazymax/diun:latest /dist
 ```
 
 With this command, the cache will be deleted because the container is removed
@@ -379,5 +379,5 @@ $ docker run --rm -t \
   -v $(pwd)/dist:/dist \
   -v $(pwd)/cache:/cache \
   crazymax/undock:latest \
-    --cachedir /cache --include /usr/local/bin --all crazymax/diun:latest ./dist
+    --cachedir /cache --include /usr/local/bin --all crazymax/diun:latest /dist
 ```
