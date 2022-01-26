@@ -23,6 +23,9 @@ local machine with a single command.
 
 See the [usage examples](usage/examples.md) for more info.
 
+!!! tip
+    See how it behaves and what you can expect in the [e2e workflow](https://github.com/crazy-max/undock/actions/workflows/e2e.yml).
+
 ## Features
 
 * Can extract multi-platform images

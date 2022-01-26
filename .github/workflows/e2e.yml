@@ -1,0 +1,68 @@
+name: e2e
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'v*'
+    paths-ignore:
+      - '**.md'
+  pull_request:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          -
+            image: "crazymax/buildx-pkg:latest"
+            all: "true"
+            loglevel: "debug"
+          -
+            image: "crazymax/buildx-pkg:latest"
+            all: "true"
+            wrap: "true"
+            loglevel: "debug"
+          -
+            image: "crazymax/diun:4.20.1"
+            all: "true"
+            include: "/usr/local/bin"
+            loglevel: "info"
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      -
+        name: Build
+        uses: docker/bake-action@v1
+        with:
+          targets: binary
+      -
+        name: Run
+        run: |
+          flags="--rm-dist"
+          if [ -n "${{ matrix.loglevel }}" ]; then
+            flags="${flags} --log-level ${{ matrix.loglevel }}"
+          fi
+          if [ "${{ matrix.all }}" = "true" ]; then
+            flags="${flags} --all"
+          fi
+          if [ "${{ matrix.wrap }}" = "true" ]; then
+            flags="${flags} --wrap"
+          fi
+          if [ -n "${{ matrix.include }}" ]; then
+            flags="${flags} --include ${{ matrix.include }}"
+          fi
+          set -x
+          ./bin/undock ${flags} ${{ matrix.image }} ./dist
+      -
+        name: Dist content
+        run: |
+          tree -nh ./dist
