@@ -1,0 +1,97 @@
+site_name: Undock
+site_description: Extract contents of a container image in a local folder
+site_author: CrazyMax
+site_url: https://crazymax.dev/undock/
+edit_uri: edit/master/docs/
+docs_dir: docs
+
+repo_name: crazy-max/undock
+repo_url: https://github.com/crazy-max/undock
+
+extra:
+  seo:
+    google: Kscpetr5E2zNDM0pqz-0xhtPZ77oY2oAS6Lid6yEUUM
+    bing: D188E0BEC1AB6E7C1E0194BFC35D0033
+    #alexa:
+    #yandex:
+  social:
+    - icon: fontawesome/brands/github-alt
+      link: https://github.com/crazy-max/undock
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/crazyws
+  plausible:
+    server: plausible.re4per.com
+    domain: crazymax.dev/undock
+
+theme:
+  name: material
+  custom_dir: docs/_overrides
+  language: en
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+  logo: assets/logo.png
+  favicon: assets/favicon.ico
+  include_search_page: false
+  search_index_only: true
+
+extra_css:
+  - assets/stylesheets/extra.css
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - footnotes
+  - markdown_include.include:
+      base_path: docs
+  - meta
+  - pymdownx.details
+  - pymdownx.tabbed
+  - pymdownx.superfences
+  - pymdownx.emoji:
+      emoji_index: !!python/name:materialx.emoji.twemoji
+      emoji_generator: !!python/name:materialx.emoji.to_svg
+  - toc:
+      permalink: true
+
+plugins:
+  - exclude:
+      glob:
+        - "_overrides/*"
+  - git-revision-date-localized:
+      type: iso_datetime
+      enable_creation_date: true
+  - macros
+  - search:
+      prebuild_index: python
+      lang:
+        - en
+
+nav:
+  - Home: index.md
+  - Installation:
+    - Download: install/download.md
+    - Docker image: install/docker.md
+  - Usage:
+    - Command Line: usage/cli.md
+    - Examples: usage/examples.md
+  - Build: build.md
+  - Changelog: changelog.md
+  - Reporting an issue: reporting-issue.md
+  - Contributing: contributing.md
+  - Donate: donate.md
