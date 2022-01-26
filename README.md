@@ -16,7 +16,15 @@
 ## About
 
 **Undock** is a CLI application that allows you to extract contents of a
-container image in a local folder.
+container image in a local folder. This can be useful if you use a registry
+to store artifacts in a scratch image, and you want to extract them on your
+local machine with a single command.
+
+## Features
+
+* Can extract multi-platform images
+* Include a subset of files/dirs
+* Cache support
 
 ## Documentation
 
