@@ -89,6 +89,12 @@ target "gomod-outdated" {
   output = ["type=cacheonly"]
 }
 
+target "docs" {
+  dockerfile = "./hack/docs.Dockerfile"
+  target = "release"
+  output = ["./site"]
+}
+
 group "validate" {
   targets = ["lint", "vendor-validate"]
 }
