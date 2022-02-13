@@ -50,7 +50,7 @@ image, a container store reference, etc. Following schemes can be used:
 !!! note
     `docker://` is used by default if scheme unset.
 
-```console
+```shell
 # registry image
 undock --rm-dist crazymax/buildx-pkg:latest ./dist
 # or
