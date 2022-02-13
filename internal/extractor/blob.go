@@ -1,4 +1,4 @@
-package app
+package extractor
 
 import (
 	"context"
@@ -14,7 +14,16 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func (c *Undock) extract(logger zerolog.Logger, filename string, dest string) error {
+// ExtractBlobOpts holds extract blob options
+type ExtractBlobOpts struct {
+	Context  context.Context
+	Logger   zerolog.Logger
+	Includes []string
+}
+
+func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
+	opts.Logger.Info().Msgf("Extracting blob")
+
 	var r io.ReadCloser
 	dt, err := os.Open(filename)
 	if err != nil {
@@ -26,7 +35,7 @@ func (c *Undock) extract(logger zerolog.Logger, filename string, dest string) er
 	if err != nil {
 		return err
 	}
-	logger.Debug().Msgf("Blob format %s detected", format.Name())
+	opts.Logger.Debug().Msgf("Blob format %s detected", format.Name())
 
 	var u archiver.Extractor
 	var d archiver.Decompressor
@@ -56,23 +65,21 @@ func (c *Undock) extract(logger zerolog.Logger, filename string, dest string) er
 	}
 
 	var pathsInArchive []string
-	if len(c.cli.Includes) > 0 {
-		for _, inc := range c.cli.Includes {
-			inc = strings.TrimPrefix(inc, "/")
-			if len(inc) > 0 {
-				pathsInArchive = append(pathsInArchive, inc)
-			}
+	for _, inc := range opts.Includes {
+		inc = strings.TrimPrefix(inc, "/")
+		if len(inc) > 0 {
+			pathsInArchive = append(pathsInArchive, inc)
 		}
 	}
 	if len(pathsInArchive) == 0 {
 		pathsInArchive = nil
 	}
 
-	err = u.Extract(c.ctx, r, pathsInArchive, func(ctx context.Context, f archiver.File) error {
+	err = u.Extract(opts.Context, r, pathsInArchive, func(ctx context.Context, f archiver.File) error {
 		if f.FileInfo.IsDir() {
-			logger.Trace().Msgf("Extracting %s", f.NameInArchive)
+			opts.Logger.Trace().Msgf("Extracting %s", f.NameInArchive)
 		} else {
-			logger.Debug().Msgf("Extracting %s", f.NameInArchive)
+			opts.Logger.Debug().Msgf("Extracting %s", f.NameInArchive)
 		}
 
 		path := filepath.Join(dest, f.NameInArchive)

@@ -14,7 +14,7 @@
 
 ---
 
-## What is Undock?
+## What's Undock?
 
 **Undock** is a CLI application that allows you to extract contents of a
 container image in a local folder. This can be useful if you use a registry
@@ -28,6 +28,7 @@ See the [usage examples](usage/examples.md) for more info.
 
 ## Features
 
+* Many source support (docker, archive, store, oci, tar)
 * Can extract multi-platform images
 * Include a subset of files/dirs
 * Cache support

@@ -1,6 +1,8 @@
-package app
+package image
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -8,27 +10,57 @@ import (
 
 	"github.com/containers/image/v5/copy"
 	"github.com/containers/image/v5/docker"
-	dockerconfig "github.com/containers/image/v5/pkg/docker/config"
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
+	dockercli "github.com/crazy-max/undock/pkg/docker"
 	"github.com/crazy-max/undock/pkg/image"
-	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
-func (c *Undock) cacheSource(logger zerolog.Logger, src string) ([]byte, string, error) {
-	srcCtx, dgst, err := c.srcCtx(src, c.cli.Insecure)
+func (c *Client) cacheSource(src string) ([]byte, string, error) {
+	srcCtx, srcObj, err := c.srcCtx(src, c.cli.Insecure)
+	srcRef, err := srcObj.Reference()
 	if err != nil {
-		return nil, "", err
-	}
-	srcRef, err := alltransports.ParseImageName(fmt.Sprintf("docker://%s", src))
-	if err != nil {
-		return nil, "", errors.Wrapf(err, "invalid container image source %s", src)
+		return nil, "", errors.Wrapf(err, "cannot parse reference '%s'", srcObj.String())
 	}
 
-	cachedir := filepath.Join(c.cli.CacheDir, dgst.Encoded())
+	var cacheDigest string
+	switch srcObj.Scheme() {
+	case "docker":
+		dockerImg, err := image.Parse(strings.TrimPrefix(src, "docker://"))
+		if err != nil {
+			return nil, "", err
+		}
+		dockerRef, err := image.Reference(dockerImg.String())
+		if err != nil {
+			return nil, "", errors.Wrap(err, "cannot parse docker reference")
+		}
+		if dgst, err := docker.GetDigest(c.ctx, srcCtx, dockerRef); err == nil {
+			cacheDigest = srcObj.Scheme() + "-" + dgst.Encoded()
+		} else {
+			return nil, "", errors.Wrap(err, "cannot get docker reference digest")
+		}
+	case "docker-daemon":
+		dcli, err := dockercli.New(c.ctx)
+		if err != nil {
+			return nil, "", err
+		}
+		if img, err := dcli.ImageInspectWithRaw(strings.TrimPrefix(src, "docker-daemon://")); err == nil {
+			cacheDigest = srcObj.Scheme() + "-" + strings.TrimPrefix(img.ID, "sha256:")
+		} else {
+			return nil, "", err
+		}
+	default:
+		// TODO: Find a proper way to create a cache fingerprint. Best effort atm with transport.
+		srcHash := sha256.New()
+		srcHash.Write([]byte(srcRef.StringWithinTransport()))
+		cacheDigest = srcObj.Scheme() + "-" + hex.EncodeToString(srcHash.Sum(nil))
+	}
+
+	cachedir := filepath.Join(c.cli.CacheDir, cacheDigest)
+	c.logger.Info().Msgf("Computed cache digest %s", cacheDigest)
 
 	dstRef, err := alltransports.ParseImageName(fmt.Sprintf("oci:%s", cachedir))
 	if err != nil {
@@ -51,7 +83,7 @@ func (c *Undock) cacheSource(logger zerolog.Logger, src string) ([]byte, string,
 	defer policyContext.Destroy()
 
 	manblob, err := copy.Image(c.ctx, policyContext, dstRef, srcRef, &copy.Options{
-		ReportWriter:                          &progressWriter{logger: logger},
+		ReportWriter:                          &progressWriter{logger: c.logger},
 		SourceCtx:                             srcCtx,
 		DestinationCtx:                        dstCtx,
 		ImageListSelection:                    imageSelection,
@@ -61,19 +93,8 @@ func (c *Undock) cacheSource(logger zerolog.Logger, src string) ([]byte, string,
 	return manblob, cachedir, err
 }
 
-func (c *Undock) srcCtx(name string, insecure bool) (*types.SystemContext, *digest.Digest, error) {
-	img, err := image.Parse(name)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	auth, err := dockerconfig.GetCredentials(nil, img.Domain)
-	if err != nil {
-		return nil, nil, errors.Wrapf(err, "cannot find docker credentials")
-	}
-
+func (c *Client) srcCtx(name string, insecure bool) (*types.SystemContext, *Source, error) {
 	sysCtx := &types.SystemContext{
-		DockerAuthConfig:                  &auth,
 		DockerDaemonInsecureSkipTLSVerify: insecure,
 		DockerInsecureSkipTLSVerify:       types.NewOptionalBool(insecure),
 		DockerRegistryUserAgent:           c.meta.UserAgent,
@@ -82,21 +103,10 @@ func (c *Undock) srcCtx(name string, insecure bool) (*types.SystemContext, *dige
 		VariantChoice:                     c.platform.Variant,
 		BlobInfoCacheDir:                  filepath.Join(c.cli.CacheDir, "blobs"),
 	}
-
-	ref, err := image.Reference(img.String())
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "cannot parse reference")
-	}
-
-	dgst, err := docker.GetDigest(c.ctx, sysCtx, ref)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "cannot get image digest from HEAD request")
-	}
-
-	return sysCtx, &dgst, nil
+	return sysCtx, NewSource(name), nil
 }
 
-func (c *Undock) dstCtx(name string) (*types.SystemContext, error) {
+func (c *Client) dstCtx(name string) (*types.SystemContext, error) {
 	return &types.SystemContext{
 		DirForceDecompress: true,
 		BlobInfoCacheDir:   filepath.Join(c.cli.CacheDir, "blobs"),

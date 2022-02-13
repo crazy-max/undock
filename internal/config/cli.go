@@ -15,10 +15,10 @@ type Cli struct {
 
 	All      bool     `kong:"name=all,default=false,help='Extract all architectures if source is a manifest list.'"`
 	Includes []string `kong:"name=include,help='Include a subset of files/dirs from the source image.'"`
-	Insecure bool     `kong:"name=insecure,default=false,help='Allow contacting the registry over HTTP, or HTTPS with failed TLS verification.'"`
+	Insecure bool     `kong:"name=insecure,default=false,help='Allow contacting the registry or docker daemon over HTTP, or HTTPS with failed TLS verification.'"`
 	RmDist   bool     `kong:"name=rm-dist,default=false,help='Removes dist folder.'"`
 	Wrap     bool     `kong:"name=wrap,default=false,help='For a manifest list, merge output in dist folder.'"`
 
-	Source string `kong:"arg,required,name=source,help='Source image from a registry. (eg. alpine:latest)'"`
+	Source string `kong:"arg,required,name=source,help='Source image. (eg. alpine:latest)'"`
 	Dist   string `kong:"arg,required,name=dist,type=path,help='Dist folder. (eg. ./dist)'"`
 }
