@@ -22,6 +22,7 @@ local machine with a single command.
 
 ## Features
 
+* Many source support (docker, archive, store, oci, tar)
 * Can extract multi-platform images
 * Include a subset of files/dirs
 * Cache support

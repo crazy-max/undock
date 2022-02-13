@@ -2,18 +2,17 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/containerd/containerd/platforms"
-	"github.com/containers/image/v5/manifest"
 	"github.com/crazy-max/undock/internal/config"
+	"github.com/crazy-max/undock/internal/extractor"
+	ximage "github.com/crazy-max/undock/internal/extractor/image"
+	"github.com/crazy-max/undock/pkg/image"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
-	"golang.org/x/sync/errgroup"
 )
 
 // Undock represents an active undock object
@@ -70,76 +69,33 @@ func (c *Undock) Start() error {
 		return errors.Wrapf(err, "failed to create dist folder %q", c.cli.Dist)
 	}
 
-	logger := log.With().Str("src", c.cli.Source).Logger()
+	var (
+		xcli *extractor.Client
+		err  error
+	)
 
-	logger.Info().Msg("Extracting source image")
-	manblob, cachedir, err := c.cacheSource(logger, c.cli.Source)
+	switch {
+	case isImageScheme(c.cli.Source):
+		xcli, err = ximage.New(c.ctx, c.meta, c.cli, c.platform)
+	default:
+		return errors.Errorf("unsupported source %q", c.cli.Source)
+	}
 	if err != nil {
-		return errors.Wrap(err, "cannot cache source")
+		return err
 	}
 
-	type manifestEntry struct {
-		platform specs.Platform
-		manifest *manifest.OCI1
-	}
+	return xcli.Extract()
+}
 
-	var mans []manifestEntry
-
-	mtype := manifest.GuessMIMEType(manblob)
-	if mtype == specs.MediaTypeImageManifest {
-		man, err := manifest.OCI1FromManifest(manblob)
-		if err != nil {
-			return errors.Wrap(err, "cannot create OCI manifest instance from blob")
-		}
-		mans = append(mans, manifestEntry{
-			platform: c.platform,
-			manifest: man,
-		})
-	} else if mtype == specs.MediaTypeImageIndex {
-		ocindex, err := manifest.OCI1IndexFromManifest(manblob)
-		if err != nil {
-			return errors.Wrap(err, "cannot create OCI manifest index instance from blob")
-		}
-		for _, m := range ocindex.Manifests {
-			mblob, err := os.ReadFile(path.Join(cachedir, "blobs", m.Digest.Algorithm().String(), m.Digest.Hex()))
-			if err != nil {
-				return errors.Wrapf(err, "cannot read OCI manifest JSON for platform %s", platforms.Format(*m.Platform))
-			}
-			man, err := manifest.OCI1FromManifest(mblob)
-			if err != nil {
-				return errors.Wrap(err, "cannot create OCI manifest instance from blob")
-			}
-			mans = append(mans, manifestEntry{
-				platform: *m.Platform,
-				manifest: man,
-			})
+func isImageScheme(source string) bool {
+	schemes := []string{"containers-storage", "docker", "docker-archive", "docker-daemon", "oci", "oci-archive", "ostree"}
+	for _, scheme := range schemes {
+		if strings.HasPrefix(source, scheme+"://") {
+			return true
 		}
 	}
-
-	eg, _ := errgroup.WithContext(c.ctx)
-	for _, mane := range mans {
-		func(mane manifestEntry) {
-			eg.Go(func() error {
-				dest := c.cli.Dist
-				if !c.cli.Wrap && len(mans) > 1 {
-					dest = path.Join(c.cli.Dist, fmt.Sprintf("%s_%s%s", mane.platform.OS, mane.platform.Architecture, mane.platform.Variant))
-				}
-				if err := os.MkdirAll(dest, 0700); err != nil {
-					return errors.Wrapf(err, "failed to create destination folder %q", dest)
-				}
-				for _, layer := range mane.manifest.LayerInfos() {
-					sublogger := logger.With().Str("platform", platforms.Format(mane.platform)).Str("blob", layer.Digest.String()).Logger()
-					sublogger.Info().Msgf("Extracting blob")
-					if err = c.extract(sublogger, path.Join(cachedir, "blobs", layer.Digest.Algorithm().String(), layer.Digest.Hex()), dest); err != nil {
-						return err
-					}
-				}
-				return nil
-			})
-		}(mane)
-	}
-
-	return eg.Wait()
+	_, err := image.Reference(source)
+	return err == nil
 }
 
 // Close closes undock

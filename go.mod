@@ -6,6 +6,7 @@ require (
 	github.com/alecthomas/kong v0.4.0
 	github.com/containerd/containerd v1.5.9
 	github.com/containers/image/v5 v5.19.1
+	github.com/docker/docker v20.10.12+incompatible
 	github.com/mholt/archiver/v4 v4.0.0-alpha.4
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.0.3-0.20211202193544-a5463b7f9c84
@@ -34,7 +35,6 @@ require (
 	github.com/cyphar/filepath-securejoin v0.2.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/docker/distribution v2.7.1+incompatible // indirect
-	github.com/docker/docker v20.10.12+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.6.4 // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-metrics v0.0.1 // indirect
