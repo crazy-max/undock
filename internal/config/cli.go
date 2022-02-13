@@ -10,7 +10,7 @@ type Cli struct {
 	LogCaller  bool   `kong:"name=log-caller,env=LOG_CALLER,default=false,help='Add file:line of the caller to log output.'"`
 	LogNoColor bool   `kong:"name=log-nocolor,env=LOG_NOCOLOR,default=false,help='Disable colorized output.'"`
 
-	CacheDir string `kong:"name=cachedir,type=path,help='Set cache path. (eg. ~/.local/share/undock/cache)'"`
+	CacheDir string `kong:"name=cachedir,type=path,env=UNDOCK_CACHE_DIR,help='Set cache path. (eg. ~/.local/share/undock/cache)'"`
 	Platform string `kong:"name=platform,help='Enforce platform for source image. (eg. linux/amd64)'"`
 
 	All      bool     `kong:"name=all,default=false,help='Extract all architectures if source is a manifest list.'"`
