@@ -7,7 +7,7 @@ require (
 	github.com/containerd/containerd v1.6.0
 	github.com/containers/image/v5 v5.19.1
 	github.com/docker/docker v20.10.12+incompatible
-	github.com/mholt/archiver/v4 v4.0.0-alpha.4
+	github.com/mholt/archiver/v4 v4.0.0-alpha.5
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.0.3-0.20211202193544-a5463b7f9c84
 	github.com/pkg/errors v0.9.1
