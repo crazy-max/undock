@@ -377,7 +377,7 @@ as soon as the command ends, but you can define a volume to keep it:
 ```shell
 $ docker run --rm -t \
   -v $(pwd)/dist:/dist \
-  -v $(pwd)/cache:/cache \
+  -v $(pwd)/cache:/var/cache/undock \
   crazymax/undock:latest \
-    --cachedir /cache --include /usr/local/bin --all crazymax/diun:latest /dist
+    --include /usr/local/bin --all crazymax/diun:latest /dist
 ```

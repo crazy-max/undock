@@ -25,7 +25,7 @@ Flags:
       --log-json               Enable JSON logging output ($LOG_JSON).
       --log-caller             Add file:line of the caller to log output ($LOG_CALLER).
       --log-nocolor            Disable colorized output ($LOG_NOCOLOR).
-      --cachedir=STRING        Set cache path. (eg. ~/.local/share/undock/cache)
+      --cachedir=STRING        Set cache path. (eg. ~/.local/share/undock/cache) ($UNDOCK_CACHE_DIR)
       --platform=STRING        Enforce platform for source image. (eg. linux/amd64)
       --all                    Extract all architectures if source is a manifest list.
       --include=INCLUDE,...    Include a subset of files/dirs from the source image.
@@ -70,11 +70,13 @@ undock --rm-dist docker-daemon://myimage:local ./dist
 
 Following environment variables can be used in place:
 
-| Name               | Default       | Description   |
-|--------------------|---------------|---------------|
-| `LOG_LEVEL`        | `info`        | Log level output |
-| `LOG_JSON`         | `false`       | Enable JSON logging output |
-| `LOG_CALLER`       | `false`       | Enable to add `file:line` of the caller |
-| `LOG_NOCOLOR`      | `false`       | Disable the colorized output |
+| Name                    | Default       | Description   |
+|-------------------------|---------------|---------------|
+| `UNDOCK_CACHE_DIR`[^2]  |               | Cache path |
+| `LOG_LEVEL`             | `info`        | Log level output |
+| `LOG_JSON`              | `false`       | Enable JSON logging output |
+| `LOG_CALLER`            | `false`       | Enable to add `file:line` of the caller |
+| `LOG_NOCOLOR`           | `false`       | Disable the colorized output |
 
 [^1]: See [containers image transport page](https://github.com/containers/image/blob/main/docs/containers-transports.5.md) for more info.
+[^2]: Default cache dir for the [Docker image](../install/docker.md) is `/var/cache/undock`.

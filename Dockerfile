@@ -56,4 +56,5 @@ COPY --from=build /usr/local/bin/undock* /
 FROM alpine:3.15
 RUN apk --update --no-cache add ca-certificates openssl
 COPY --from=build /usr/local/bin/undock /usr/local/bin/undock
+ENV UNDOCK_CACHE_DIR="/var/cache/undock"
 ENTRYPOINT [ "undock" ]
