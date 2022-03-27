@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/alecthomas/kong v0.5.0
-	github.com/containerd/containerd v1.6.1
+	github.com/containerd/containerd v1.6.2
 	github.com/containers/image/v5 v5.20.0
 	github.com/docker/docker v20.10.13+incompatible
 	github.com/mholt/archiver/v4 v4.0.0-alpha.5
