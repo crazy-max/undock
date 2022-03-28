@@ -43,10 +43,9 @@ func New(meta config.Meta, cli config.Cli) (*Undock, error) {
 
 	platform := platforms.DefaultSpec()
 	if len(cli.Platform) > 0 {
-		if p, err := platforms.Parse(cli.Platform); err != nil {
+		var err error
+		if platform, err = platforms.Parse(cli.Platform); err != nil {
 			return nil, errors.Wrapf(err, "invalid platform %q", cli.Platform)
-		} else {
-			platform = p
 		}
 	}
 

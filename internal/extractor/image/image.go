@@ -122,6 +122,7 @@ func (c *Client) Extract() error {
 	return eg.Wait()
 }
 
+//nolint:deadcode
 func formatReference(source string) (string, string) {
 	scheme := sourceScheme(source)
 	switch scheme {
