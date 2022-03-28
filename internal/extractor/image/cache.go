@@ -21,6 +21,9 @@ import (
 
 func (c *Client) cacheSource(src string) ([]byte, string, error) {
 	srcCtx, srcObj, err := c.srcCtx(src, c.cli.Insecure)
+	if err != nil {
+		return nil, "", errors.Wrap(err, "cannot create source context")
+	}
 	srcRef, err := srcObj.Reference()
 	if err != nil {
 		return nil, "", errors.Wrapf(err, "cannot parse reference '%s'", srcObj.String())
@@ -80,7 +83,7 @@ func (c *Client) cacheSource(src string) ([]byte, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	defer policyContext.Destroy()
+	defer policyContext.Destroy() //nolint:errcheck
 
 	manblob, err := copy.Image(c.ctx, policyContext, dstRef, srcRef, &copy.Options{
 		ReportWriter:                          &progressWriter{logger: c.logger},

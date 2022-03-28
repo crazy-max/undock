@@ -51,7 +51,7 @@ func main() {
 	logging.Configure(cli)
 
 	// Handle os signals
-	channel := make(chan os.Signal)
+	channel := make(chan os.Signal, 1)
 	signal.Notify(channel, os.Interrupt, SIGTERM)
 	go func() {
 		sig := <-channel
