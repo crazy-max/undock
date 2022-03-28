@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0 (2022/03/28)
+
+* support `.gz` format (#22)
+* `UNDOCK_CACHE_DIR` env var to set cache dir and predefined one in Docker image (#8)
+* build(deps): bump github.com/stretchr/testify from 1.7.0 to 1.7.1 (#18)
+* build(deps): bump github.com/docker/docker from 20.10.12+incompatible to 20.10.14+incompatible (#16 #20)
+* build(deps): bump github.com/containers/image/v5 from 5.19.1 to 5.20.0 (#13)
+* build(deps): bump github.com/mholt/archiver/v4 from 4.0.0-alpha.4 to 4.0.0-alpha.5 (#12)
+* build(deps): bump github.com/alecthomas/kong from 0.4.0 to 0.5.0 (#10 #17)
+* build(deps): bump github.com/containerd/containerd from 1.5.9 to 1.6.2 (#9 #14 #21)
+
 ## 0.2.0 (2022/02/13)
 
 * support more sources through specific schemes (#7)
