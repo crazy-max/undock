@@ -42,7 +42,7 @@ func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 	switch format.Name() {
 	case ".zip":
 		u = archiver.Zip{}
-	case ".tar.gz":
+	case ".gz", ".tar.gz":
 		u = archiver.Tar{}
 		d = archiver.Gz{}
 	case ".tar.xz":
