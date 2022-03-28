@@ -24,14 +24,13 @@ type ExtractBlobOpts struct {
 func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 	opts.Logger.Info().Msgf("Extracting blob")
 
-	var r io.ReadCloser
 	dt, err := os.Open(filename)
 	if err != nil {
 		return err
 	}
 	defer dt.Close()
 
-	format, err := archiver.Identify(filename, dt)
+	format, r, err := archiver.Identify(filename, dt)
 	if err != nil {
 		return err
 	}
@@ -55,10 +54,8 @@ func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 		return errors.Errorf("blob format not supported: %s", format.Name())
 	}
 
-	if d == nil {
-		r = dt
-	} else {
-		r, err = d.OpenReader(dt)
+	if d != nil {
+		r, err = d.OpenReader(r)
 		if err != nil {
 			return err
 		}
