@@ -89,7 +89,7 @@ jobs:
           EOL
       -
         name: Build image and load
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v3
         with:
           context: ./bin/test
           load: true
