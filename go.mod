@@ -7,7 +7,7 @@ require (
 	github.com/containerd/containerd v1.6.4
 	github.com/containers/image/v5 v5.21.1
 	github.com/docker/docker v20.10.16+incompatible
-	github.com/mholt/archiver/v4 v4.0.0-alpha.6
+	github.com/mholt/archiver/v4 v4.0.0-alpha.7
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.0.3-0.20211202193544-a5463b7f9c84
 	github.com/pkg/errors v0.9.1
@@ -52,7 +52,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.15.2 // indirect
+	github.com/klauspost/compress v1.15.5 // indirect
 	github.com/klauspost/pgzip v1.2.5 // indirect
 	github.com/mattn/go-runewidth v0.0.13 // indirect
 	github.com/mattn/go-shellwords v1.0.12 // indirect
