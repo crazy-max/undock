@@ -2,6 +2,7 @@
 
 ARG GO_VERSION="1.18"
 ARG GORELEASER_XX_VERSION="1.2.5"
+ARG ALPINE_VERSION="3.16"
 
 FROM --platform=$BUILDPLATFORM crazymax/goreleaser-xx:${GORELEASER_XX_VERSION} AS goreleaser-xx
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS base
@@ -53,7 +54,7 @@ COPY --from=build /out/*.zip /
 FROM scratch AS binary
 COPY --from=build /usr/local/bin/undock* /
 
-FROM alpine:3.15
+FROM alpine:${ALPINE_VERSION}
 RUN apk --update --no-cache add ca-certificates openssl
 COPY --from=build /usr/local/bin/undock /usr/local/bin/undock
 ENV UNDOCK_CACHE_DIR="/var/cache/undock"
