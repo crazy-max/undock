@@ -14,7 +14,7 @@ on:
 
 env:
   DOCKERHUB_SLUG: crazymax/undock
-  GHCR_SLUG: ghcr.io/crazy-max/undock
+  GHCR_SLUG: ghcr.io/${{ github.repository }}
 
 jobs:
   validate:
