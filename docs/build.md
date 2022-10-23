@@ -10,7 +10,7 @@ cd undock
 # build docker image and output to docker with undock:local tag (default)
 docker buildx bake
 
-# build binary in ./bin/undock
+# build binary in ./bin/build/undock
 docker buildx bake binary
 
 # build artifact
