@@ -1,7 +1,7 @@
 name: e2e
 
 concurrency:
-  group: e2e-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 on:
@@ -12,6 +12,9 @@ on:
     paths-ignore:
       - '**.md'
   pull_request:
+
+env:
+  DESTDIR: ./bin
 
 jobs:
   registry:
@@ -63,7 +66,7 @@ jobs:
             flags="${flags} --include ${{ matrix.include }}"
           fi
           set -x
-          ./bin/undock ${flags} ${{ matrix.image }} ./dist
+          ${{ env.DESTDIR }}/build/undock ${flags} ${{ matrix.image }} ./dist
       -
         name: Dist content
         run: |
@@ -101,7 +104,7 @@ jobs:
       -
         name: Run
         run: |
-          ./bin/undock --rm-dist --include /hello docker-daemon://image:local ./dist
+          ${{ env.DESTDIR }}/build/undock --rm-dist --include /hello docker-daemon://image:local ./dist
       -
         name: Dist content
         run: |
@@ -129,7 +132,7 @@ jobs:
       -
         name: Run
         run: |
-          ./bin/undock --rm-dist docker-archive://archive.tar ./dist
+          ${{ env.DESTDIR }}/build/undock --rm-dist docker-archive://archive.tar ./dist
       -
         name: Dist content
         run: |
