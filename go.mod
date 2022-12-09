@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/alecthomas/kong v0.6.1
-	github.com/containerd/containerd v1.6.8
+	github.com/containerd/containerd v1.6.12
 	github.com/containers/image/v5 v5.23.0
 	github.com/docker/docker v20.10.21+incompatible
 	github.com/mholt/archiver/v4 v4.0.0-alpha.7
@@ -21,7 +21,7 @@ require (
 require (
 	github.com/BurntSushi/toml v1.2.0 // indirect
 	github.com/Microsoft/go-winio v0.5.2 // indirect
-	github.com/Microsoft/hcsshim v0.9.4 // indirect
+	github.com/Microsoft/hcsshim v0.9.5 // indirect
 	github.com/VividCortex/ewma v1.2.0 // indirect
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d // indirect
 	github.com/andybalholm/brotli v1.0.4 // indirect
