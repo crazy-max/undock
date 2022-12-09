@@ -9,7 +9,7 @@ require (
 	github.com/docker/docker v20.10.21+incompatible
 	github.com/mholt/archiver/v4 v4.0.0-alpha.7
 	github.com/opencontainers/go-digest v1.0.0
-	github.com/opencontainers/image-spec v1.1.0-rc1
+	github.com/opencontainers/image-spec v1.1.0-rc2
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.28.0
 	github.com/sirupsen/logrus v1.9.0
