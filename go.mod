@@ -6,7 +6,7 @@ require (
 	github.com/alecthomas/kong v0.7.1
 	github.com/containerd/containerd v1.6.12
 	github.com/containers/image/v5 v5.23.1
-	github.com/docker/docker v20.10.21+incompatible
+	github.com/docker/docker v20.10.23+incompatible
 	github.com/mholt/archiver/v4 v4.0.0-alpha.7
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.0-rc2
