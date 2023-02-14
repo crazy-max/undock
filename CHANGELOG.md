@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.0 (2023/02/14)
+
+* Go 1.19 (#65 #25)
+* Alpine Linux 3.17 (#90 #50)
+* Enhance workflow (#66)
+* build(deps): bump github.com/mholt/archiver/v4 to 4.0.0-alpha.7 (#43 #24)
+* build(deps): bump github.com/containers/image/v5 from 5.20.0 to 5.24.1 (#87 #72 #62 #31 #26)
+* build(deps): bump github.com/containerd/containerd from 1.6.2 to 1.6.17 (#89 #76 #59 #45 #32 #30)
+* build(deps): bump github.com/docker/docker from 20.10.14+incompatible to 20.10.23+incompatible (#81 #71 #64 #46 #40)
+* build(deps): bump github.com/stretchr/testify from 1.7.1 to 1.8.1 (#67 #54 #44)
+* build(deps): bump github.com/alecthomas/kong from 0.5.0 to 0.7.1 (#49 #73)
+* build(deps): bump github.com/rs/zerolog from 1.26.1 to 1.29.0 (#83 #60 #47)
+* build(deps): bump github.com/sirupsen/logrus from 1.8.1 to 1.9.0 (#56)
+* build(deps): bump github.com/opencontainers/image-spec from 1.1.0-rc1 to 1.1.0-rc2 (#68)
+* build(deps): bump golang.org/x/sys from 0.4.0 to 0.5.0 (#91)
+
 ## 0.3.0 (2022/03/28)
 
 * support `.gz` format (#22)
