@@ -1,6 +1,7 @@
 package extractor
 
 import (
+	"archive/tar"
 	"context"
 	"fmt"
 	"io"
@@ -86,7 +87,11 @@ func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 
 		switch {
 		case f.FileInfo.IsDir():
-			return os.MkdirAll(path, f.Mode())
+			if err := os.MkdirAll(path, f.Mode()); err != nil {
+				return err
+			}
+			st := f.Sys().(*tar.Header)
+			return os.Lchown(path, int(st.Uid), int(st.Gid))
 		case f.FileInfo.Mode().IsRegular():
 			return writeFile(ctx, path, f)
 		case f.FileInfo.Mode()&fs.ModeSymlink != 0:
@@ -117,6 +122,11 @@ func writeFile(ctx context.Context, path string, f archiver.File) error {
 		return err
 	}
 
+	st := f.Sys().(*tar.Header)
+	if err := os.Lchown(path, int(st.Uid), int(st.Gid)); err != nil {
+		return err
+	}
+
 	_, err = io.Copy(w, readerContext(ctx, r))
 	return err
 }
@@ -132,6 +142,11 @@ func writeSymlink(ctx context.Context, path string, f archiver.File) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	st := f.Sys().(*tar.Header)
+	if err := os.Lchown(path, int(st.Uid), int(st.Gid)); err != nil {
+		return err
 	}
 
 	return os.Symlink(f.LinkTarget, path)
