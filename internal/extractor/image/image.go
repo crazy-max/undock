@@ -122,7 +122,7 @@ func (c *Client) Extract() error {
 	return eg.Wait()
 }
 
-//nolint:deadcode
+//nolint:unused
 func formatReference(source string) (string, string) {
 	scheme := sourceScheme(source)
 	switch scheme {
@@ -135,6 +135,7 @@ func formatReference(source string) (string, string) {
 	}
 }
 
+//nolint:unused
 func sourceScheme(source string) string {
 	schemes := []string{"containers-storage", "docker", "docker-archive", "docker-daemon", "oci", "oci-archive", "ostree"}
 	for _, scheme := range schemes {
