@@ -118,7 +118,7 @@ func (c *Client) dstCtx(name string) (*types.SystemContext, error) {
 
 type progressWriter struct {
 	logger zerolog.Logger
-	writer io.Writer
+	writer io.Writer //nolint:unused
 }
 
 func (w *progressWriter) Write(p []byte) (n int, err error) {
