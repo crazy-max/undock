@@ -32,11 +32,7 @@ func (c *Client) cacheSource(src string) ([]byte, string, error) {
 	var cacheDigest string
 	switch srcObj.Scheme() {
 	case "docker":
-		dockerImg, err := image.Parse(strings.TrimPrefix(src, "docker://"))
-		if err != nil {
-			return nil, "", err
-		}
-		dockerRef, err := image.Reference(dockerImg.String())
+		dockerRef, err := image.DockerReference(strings.TrimPrefix(src, "docker://"))
 		if err != nil {
 			return nil, "", errors.Wrap(err, "cannot parse docker reference")
 		}

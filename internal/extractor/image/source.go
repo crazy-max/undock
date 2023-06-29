@@ -5,6 +5,7 @@ import (
 
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
+	"github.com/crazy-max/undock/pkg/image"
 )
 
 var sourceSchemes = []string{"containers-storage", "docker", "docker-archive", "docker-daemon", "oci", "oci-archive", "ostree"}
@@ -38,6 +39,9 @@ func (s *Source) HasScheme() bool {
 }
 
 func (s *Source) Reference() (types.ImageReference, error) {
+	if !s.HasScheme() || s.Scheme() == "docker" {
+		return image.DockerReference(strings.TrimPrefix(s.String(), "docker://"))
+	}
 	return alltransports.ParseImageName(s.String())
 }
 
