@@ -37,6 +37,10 @@ jobs:
             all: "true"
             include: "/usr/local/bin"
             loglevel: "info"
+          -
+            image: "crazymax/diun:latest@sha256:3fca3dd86c2710586208b0f92d1ec4ce25382f4cad4ae76a2275db8e8bb24031"
+            include: "/usr/local/bin"
+            loglevel: "debug"
     steps:
       -
         name: Checkout

@@ -8,7 +8,6 @@ import (
 
 	"github.com/containerd/containerd/platforms"
 	"github.com/crazy-max/undock/internal/config"
-	"github.com/crazy-max/undock/internal/extractor"
 	ximage "github.com/crazy-max/undock/internal/extractor/image"
 	"github.com/crazy-max/undock/pkg/image"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -68,33 +67,28 @@ func (c *Undock) Start() error {
 		return errors.Wrapf(err, "failed to create dist folder %q", c.cli.Dist)
 	}
 
-	var (
-		xcli *extractor.Client
-		err  error
-	)
-
-	switch {
-	case isImageScheme(c.cli.Source):
-		xcli, err = ximage.New(c.ctx, c.meta, c.cli, c.platform)
-	default:
+	if ok, err := validateScheme(c.cli.Source); err != nil {
+		return err
+	} else if !ok {
 		return errors.Errorf("unsupported source %q", c.cli.Source)
 	}
+
+	xcli, err := ximage.New(c.ctx, c.meta, c.cli, c.platform)
 	if err != nil {
 		return err
 	}
-
 	return xcli.Extract()
 }
 
-func isImageScheme(source string) bool {
+func validateScheme(source string) (bool, error) {
 	schemes := []string{"containers-storage", "docker", "docker-archive", "docker-daemon", "oci", "oci-archive", "ostree"}
 	for _, scheme := range schemes {
 		if strings.HasPrefix(source, scheme+"://") {
-			return true
+			return true, nil
 		}
 	}
 	_, err := image.Reference(source)
-	return err == nil
+	return err == nil, err
 }
 
 // Close closes undock
