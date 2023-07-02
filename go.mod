@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/alecthomas/kong v0.8.0
 	github.com/containerd/containerd v1.6.20
-	github.com/containers/image/v5 v5.26.0
+	github.com/containers/image/v5 v5.26.1
 	github.com/docker/docker v24.0.2+incompatible
 	github.com/mholt/archiver/v4 v4.0.0-alpha.8
 	github.com/opencontainers/go-digest v1.0.0
@@ -36,7 +36,7 @@ require (
 	github.com/containerd/stargz-snapshotter/estargz v0.14.3 // indirect
 	github.com/containers/libtrust v0.0.0-20230121012942-c1716e8a8d01 // indirect
 	github.com/containers/ocicrypt v1.1.7 // indirect
-	github.com/containers/storage v1.47.0 // indirect
+	github.com/containers/storage v1.48.0 // indirect
 	github.com/cyberphone/json-canonicalization v0.0.0-20230514072755-504adb8a8af1 // indirect
 	github.com/cyphar/filepath-securejoin v0.2.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
