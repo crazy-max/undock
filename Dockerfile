@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 
 ARG GO_VERSION="1.20"
-ARG ALPINE_VERSION="3.17"
-ARG XX_VERSION="1.1.2"
+ARG ALPINE_VERSION="3.18"
+ARG XX_VERSION="1.2.1"
 ARG BUILDTAGS="containers_image_openpgp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper"
 
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
