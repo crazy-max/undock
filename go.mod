@@ -1,6 +1,6 @@
 module github.com/crazy-max/undock
 
-go 1.18
+go 1.19
 
 require (
 	github.com/alecthomas/kong v0.8.0
