@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/alecthomas/kong v0.8.0
 	github.com/containerd/containerd v1.7.5
-	github.com/containers/image/v5 v5.26.1
+	github.com/containers/image/v5 v5.27.0
 	github.com/docker/docker v24.0.5+incompatible
 	github.com/mholt/archiver/v4 v4.0.0-alpha.8
 	github.com/opencontainers/go-digest v1.0.0
