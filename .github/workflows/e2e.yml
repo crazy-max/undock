@@ -24,11 +24,11 @@ jobs:
       matrix:
         include:
           -
-            image: "crazymax/buildx-pkg:latest"
+            image: "dockereng/packaging:buildx-v0.11.1"
             all: "true"
             loglevel: "debug"
           -
-            image: "crazymax/buildx-pkg:latest"
+            image: "dockereng/packaging:buildx-v0.11.1"
             all: "true"
             wrap: "true"
             loglevel: "debug"
@@ -131,8 +131,8 @@ jobs:
       -
         name: Create docker archive
         run: |
-          docker pull crazymax/buildx-pkg:latest
-          docker save crazymax/buildx-pkg:latest > archive.tar
+          docker pull dockereng/packaging:buildx-v0.11.1
+          docker save dockereng/packaging:buildx-v0.11.1 > archive.tar
       -
         name: Run
         run: |
