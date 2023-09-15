@@ -101,11 +101,11 @@ func (c *Client) Extract() error {
 				if !c.cli.Wrap && len(mans) > 1 {
 					dest = path.Join(c.cli.Dist, fmt.Sprintf("%s_%s%s", mane.platform.OS, mane.platform.Architecture, mane.platform.Variant))
 				}
-				if err := os.MkdirAll(dest, 0o700); err != nil {
-					return errors.Wrapf(err, "failed to create destination folder %q", dest)
-				}
 				for _, layer := range mane.manifest.LayerInfos() {
-					sublogger := c.logger.With().Str("platform", platforms.Format(mane.platform)).Str("blob", layer.Digest.String()).Logger()
+					sublogger := c.logger.With().
+						Str("platform", platforms.Format(mane.platform)).
+						Str("media-type", layer.MediaType).
+						Str("blob", layer.Digest.String()).Logger()
 					if err = extractor.ExtractBlob(path.Join(cachedir, "blobs", layer.Digest.Algorithm().String(), layer.Digest.Hex()), dest, extractor.ExtractBlobOpts{
 						Context:  c.ctx,
 						Logger:   sublogger,
