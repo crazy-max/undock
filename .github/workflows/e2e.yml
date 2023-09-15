@@ -76,6 +76,38 @@ jobs:
         run: |
           tree -nh ./dist
 
+  cache:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      -
+        name: Build
+        uses: docker/bake-action@v4
+        with:
+          targets: binary
+      -
+        name: Run
+        run: |
+          ${{ env.DESTDIR }}/build/undock --log-level debug --rm-dist --all crazymax/buildx-pkg:latest ./dist
+      -
+        name: Dist content
+        run: |
+          tree -nh ./dist
+      -
+        name: Re Run
+        run: |
+          rm -rf ./dist2
+          ${{ env.DESTDIR }}/build/undock --log-level debug --rm-dist --all crazymax/buildx-pkg:latest ./dist2
+      -
+        name: Dist content
+        run: |
+          tree -nh ./dist2
+
   docker-daemon:
     runs-on: ubuntu-latest
     steps:
