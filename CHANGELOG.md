@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.0 (2023/09/15)
+
+* Warn on unknown blob format (#163)
+* Use forked module to fix nil pointer dereference (#164)
+* Bump github.com/containerd/containerd to 1.7.6 (#146 #159)
+* Bump github.com/containers/image/v5 to 5.28.0 (#160)
+* Bump github.com/docker/docker to 24.0.5+incompatible  (#138 #140)
+* Bump github.com/opencontainers/image-spec to 1.1.0-rc5 (#135 #161)
+* Bump github.com/rs/zerolog to 1.30.0 (#142)
+* Bump golang.org/x/sys to 0.11.0 (#136 #143)
+* Bump golang.org/x/sys to 0.11.0 (#143)
+
 ## 0.5.0 (2023/07/02)
 
 * Support `image:tag@digest` format (#131)
