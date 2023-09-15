@@ -32,7 +32,8 @@ func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 
 	format, r, err := archiver.Identify(filename, dt)
 	if err != nil {
-		return err
+		opts.Logger.Warn().Msg("Blob format not recognized")
+		return nil
 	}
 	opts.Logger.Debug().Msgf("Blob format %s detected", format.Name())
 
@@ -72,7 +73,7 @@ func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 		pathsInArchive = nil
 	}
 
-	err = u.Extract(opts.Context, r, pathsInArchive, func(ctx context.Context, f archiver.File) error {
+	return u.Extract(opts.Context, r, pathsInArchive, func(ctx context.Context, f archiver.File) error {
 		if f.FileInfo.IsDir() {
 			opts.Logger.Trace().Msgf("Extracting %s", f.NameInArchive)
 		} else {
@@ -80,7 +81,7 @@ func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 		}
 
 		path := filepath.Join(dest, f.NameInArchive)
-		if err = os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		if err = os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			return err
 		}
 
@@ -95,8 +96,6 @@ func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 			return fmt.Errorf("cannot handle file mode: %v", f.FileInfo.Mode())
 		}
 	})
-
-	return err
 }
 
 func writeFile(ctx context.Context, path string, f archiver.File) error {
