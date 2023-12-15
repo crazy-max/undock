@@ -120,7 +120,7 @@ func writeFile(ctx context.Context, path string, f archiver.File) error {
 	return err
 }
 
-func writeSymlink(ctx context.Context, path string, f archiver.File) error {
+func writeSymlink(_ context.Context, path string, f archiver.File) error {
 	if f.LinkTarget == "" {
 		return errors.Errorf("symlink target is empty for %s", f.Name())
 	}

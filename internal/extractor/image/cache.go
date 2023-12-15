@@ -105,10 +105,10 @@ func (c *Client) srcCtx(name string, insecure bool) (*types.SystemContext, *Sour
 	return sysCtx, NewSource(name), nil
 }
 
-func (c *Client) dstCtx(name string) (*types.SystemContext, error) {
+func (c *Client) dstCtx(cacheDir string) (*types.SystemContext, error) {
 	return &types.SystemContext{
 		DirForceDecompress: true,
-		BlobInfoCacheDir:   filepath.Join(c.cli.CacheDir, "blobs"),
+		BlobInfoCacheDir:   filepath.Join(cacheDir, "blobs"),
 	}, nil
 }
 
