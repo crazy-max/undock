@@ -7,7 +7,7 @@ ARG BUILDTAGS="containers_image_openpgp exclude_graphdriver_btrfs exclude_graphd
 
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
 
-FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS base
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS base
 COPY --from=xx / /
 ENV CGO_ENABLED=0
 RUN apk add --no-cache file git
