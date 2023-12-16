@@ -2,7 +2,7 @@
 
 ARG GO_VERSION="1.21"
 ARG ALPINE_VERSION="3.18"
-ARG XX_VERSION="1.2.1"
+ARG XX_VERSION="1.3.0"
 ARG BUILDTAGS="containers_image_openpgp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper"
 
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
