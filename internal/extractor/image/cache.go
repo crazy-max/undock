@@ -10,6 +10,8 @@ import (
 
 	"github.com/containers/image/v5/copy"
 	"github.com/containers/image/v5/docker"
+	"github.com/containers/image/v5/docker/reference"
+	"github.com/containers/image/v5/pkg/docker/config"
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/transports/alltransports"
 	"github.com/containers/image/v5/types"
@@ -20,22 +22,33 @@ import (
 )
 
 func (c *Client) cacheSource(src string) ([]byte, string, error) {
-	srcCtx, srcObj, err := c.srcCtx(src, c.cli.Insecure)
-	if err != nil {
-		return nil, "", errors.Wrap(err, "cannot create source context")
-	}
+	srcObj := NewSource(src)
 	srcRef, err := srcObj.Reference()
 	if err != nil {
 		return nil, "", errors.Wrapf(err, "cannot parse reference '%s'", srcObj.String())
 	}
 
-	var cacheDigest string
-	switch srcObj.Scheme() {
-	case "docker":
-		dockerRef, err := image.DockerReference(strings.TrimPrefix(src, "docker://"))
+	var dockerRef types.ImageReference
+	var dockerAuth types.DockerAuthConfig
+	if srcObj.Scheme() == "docker" {
+		dockerRef, err = image.DockerReference(strings.TrimPrefix(src, "docker://"))
 		if err != nil {
 			return nil, "", errors.Wrap(err, "cannot parse docker reference")
 		}
+		dockerAuth, err = config.GetCredentials(nil, reference.Domain(dockerRef.DockerReference()))
+		if err != nil {
+			c.logger.Warn().Msg("cannot retrieve Docker credentials")
+		}
+	}
+
+	srcCtx, err := c.srcCtx(&dockerAuth, c.cli.Insecure)
+	if err != nil {
+		return nil, "", errors.Wrap(err, "cannot create source context")
+	}
+
+	var cacheDigest string
+	switch srcObj.Scheme() {
+	case "docker":
 		if dgst, err := docker.GetDigest(c.ctx, srcCtx, dockerRef); err == nil {
 			cacheDigest = srcObj.Scheme() + "-" + dgst.Encoded()
 		} else {
@@ -92,8 +105,9 @@ func (c *Client) cacheSource(src string) ([]byte, string, error) {
 	return manblob, cachedir, err
 }
 
-func (c *Client) srcCtx(name string, insecure bool) (*types.SystemContext, *Source, error) {
+func (c *Client) srcCtx(auth *types.DockerAuthConfig, insecure bool) (*types.SystemContext, error) {
 	sysCtx := &types.SystemContext{
+		DockerAuthConfig:                  auth,
 		DockerDaemonInsecureSkipTLSVerify: insecure,
 		DockerInsecureSkipTLSVerify:       types.NewOptionalBool(insecure),
 		DockerRegistryUserAgent:           c.meta.UserAgent,
@@ -102,13 +116,13 @@ func (c *Client) srcCtx(name string, insecure bool) (*types.SystemContext, *Sour
 		VariantChoice:                     c.platform.Variant,
 		BlobInfoCacheDir:                  filepath.Join(c.cli.CacheDir, "blobs"),
 	}
-	return sysCtx, NewSource(name), nil
+	return sysCtx, nil
 }
 
-func (c *Client) dstCtx(cacheDir string) (*types.SystemContext, error) {
+func (c *Client) dstCtx(_ string) (*types.SystemContext, error) {
 	return &types.SystemContext{
 		DirForceDecompress: true,
-		BlobInfoCacheDir:   filepath.Join(cacheDir, "blobs"),
+		BlobInfoCacheDir:   filepath.Join(c.cli.CacheDir, "blobs"),
 	}, nil
 }
 
