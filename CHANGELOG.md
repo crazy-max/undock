@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.0 (2023/12/21)
+
+* Docker auth config support (#186)
+* Go 1.21 (#179 #185)
+* Bump github.com/alecthomas/kong to 0.8.1 (#169)
+* Bump github.com/containerd/containerd to 1.7.11 (#177)
+* Bump github.com/docker/docker to 24.0.7+incompatible (#171)
+* Bump github.com/go-jose/go-jose/v3 to 3.0.1 (#184)
+* Bump github.com/rs/zerolog to 1.31.0 (#165)
+* Bump golang.org/x/crypto to 0.17.0 (#187)
+* Bump golang.org/x/sync to 0.5.0 (#172)
+* Bump golang.org/x/sys to 0.15.0 (#175)
+
 ## 0.7.0-rc.1 (2023/12/19)
 
 * Docker auth config support (#186)
