@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/alecthomas/kong v0.8.1
 	github.com/containerd/containerd v1.7.11
-	github.com/containers/image/v5 v5.29.0
+	github.com/containers/image/v5 v5.29.1
 	github.com/docker/docker v24.0.7+incompatible
 	github.com/mholt/archiver/v4 v4.0.0-alpha.8
 	github.com/opencontainers/go-digest v1.0.0
