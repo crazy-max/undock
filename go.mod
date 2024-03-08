@@ -3,7 +3,7 @@ module github.com/crazy-max/undock
 go 1.21
 
 require (
-	github.com/alecthomas/kong v0.8.1
+	github.com/alecthomas/kong v0.9.0
 	github.com/containerd/containerd v1.7.11
 	github.com/containers/image/v5 v5.29.0
 	github.com/docker/docker v24.0.7+incompatible
