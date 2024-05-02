@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/containerd/containerd/platforms"
-	"github.com/crazy-max/undock/internal/config"
-	ximage "github.com/crazy-max/undock/internal/extractor/image"
+	"github.com/crazy-max/undock/pkg/config"
+	ximage "github.com/crazy-max/undock/pkg/extractor/image"
 	"github.com/crazy-max/undock/pkg/image"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"

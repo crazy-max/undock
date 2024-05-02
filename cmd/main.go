@@ -10,8 +10,8 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/crazy-max/undock/internal/app"
-	"github.com/crazy-max/undock/internal/config"
 	"github.com/crazy-max/undock/internal/logging"
+	"github.com/crazy-max/undock/pkg/config"
 	"github.com/rs/zerolog/log"
 )
 

@@ -9,8 +9,8 @@ import (
 
 	"github.com/containerd/containerd/platforms"
 	"github.com/containers/image/v5/manifest"
-	"github.com/crazy-max/undock/internal/config"
-	"github.com/crazy-max/undock/internal/extractor"
+	"github.com/crazy-max/undock/pkg/config"
+	"github.com/crazy-max/undock/pkg/extractor"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
