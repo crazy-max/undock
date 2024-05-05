@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/crazy-max/undock/pkg/config"
+	"github.com/crazy-max/undock/internal/config"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/rs/zerolog/pkgerrors"
