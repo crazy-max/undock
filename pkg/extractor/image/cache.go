@@ -41,7 +41,7 @@ func (c *Client) cacheSource(src string) ([]byte, string, error) {
 		}
 	}
 
-	srcCtx, err := c.srcCtx(&dockerAuth, c.cli.Insecure)
+	srcCtx, err := c.srcCtx(&dockerAuth, c.opts.RegistryInsecure)
 	if err != nil {
 		return nil, "", errors.Wrap(err, "cannot create source context")
 	}
@@ -71,7 +71,7 @@ func (c *Client) cacheSource(src string) ([]byte, string, error) {
 		cacheDigest = srcObj.Scheme() + "-" + hex.EncodeToString(srcHash.Sum(nil))
 	}
 
-	cachedir := filepath.Join(c.cli.CacheDir, cacheDigest)
+	cachedir := filepath.Join(c.opts.CacheDir, cacheDigest)
 	c.logger.Info().Msgf("Computed cache digest %s", cacheDigest)
 
 	dstRef, err := alltransports.ParseImageName(fmt.Sprintf("oci:%s", cachedir))
@@ -84,7 +84,7 @@ func (c *Client) cacheSource(src string) ([]byte, string, error) {
 	}
 
 	imageSelection := copy.CopySystemImage
-	if c.cli.All {
+	if c.opts.All {
 		imageSelection = copy.CopyAllImages
 	}
 
@@ -110,11 +110,11 @@ func (c *Client) srcCtx(auth *types.DockerAuthConfig, insecure bool) (*types.Sys
 		DockerAuthConfig:                  auth,
 		DockerDaemonInsecureSkipTLSVerify: insecure,
 		DockerInsecureSkipTLSVerify:       types.NewOptionalBool(insecure),
-		DockerRegistryUserAgent:           c.meta.UserAgent,
-		OSChoice:                          c.platform.OS,
-		ArchitectureChoice:                c.platform.Architecture,
-		VariantChoice:                     c.platform.Variant,
-		BlobInfoCacheDir:                  filepath.Join(c.cli.CacheDir, "blobs"),
+		DockerRegistryUserAgent:           c.opts.RegistryUserAgent,
+		OSChoice:                          c.opts.Platform.OS,
+		ArchitectureChoice:                c.opts.Platform.Architecture,
+		VariantChoice:                     c.opts.Platform.Variant,
+		BlobInfoCacheDir:                  filepath.Join(c.opts.CacheDir, "blobs"),
 	}
 	return sysCtx, nil
 }
@@ -122,7 +122,7 @@ func (c *Client) srcCtx(auth *types.DockerAuthConfig, insecure bool) (*types.Sys
 func (c *Client) dstCtx(_ string) (*types.SystemContext, error) {
 	return &types.SystemContext{
 		DirForceDecompress: true,
-		BlobInfoCacheDir:   filepath.Join(c.cli.CacheDir, "blobs"),
+		BlobInfoCacheDir:   filepath.Join(c.opts.CacheDir, "blobs"),
 	}, nil
 }
 

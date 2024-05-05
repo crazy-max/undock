@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/containerd/containerd/platforms"
 	"github.com/containers/image/v5/manifest"
-	"github.com/crazy-max/undock/internal/config"
-	"github.com/crazy-max/undock/internal/extractor"
+	"github.com/crazy-max/undock/pkg/extractor"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -21,22 +21,68 @@ import (
 // Client represents an active image extractor object
 type Client struct {
 	*extractor.Client
-	ctx      context.Context
-	meta     config.Meta
-	cli      config.Cli
-	platform specs.Platform
-	logger   zerolog.Logger
+	ctx    context.Context
+	opts   Options
+	logger zerolog.Logger
+}
+
+// Options represents image extractor options
+type Options struct {
+	// Source image reference
+	Source string
+	// Platform to enforce for Source image
+	Platform specs.Platform
+	// Includes a subset of files/dirs from the Source image
+	Includes []string
+	// All extracts all architectures if Source image is a manifest list
+	All bool
+
+	// Dist folder
+	Dist string
+	// Wrap merges output in Dist folder for a manifest list
+	Wrap bool
+
+	// RegistryInsecure allows contacting the registry or docker daemon over
+	// HTTP, or HTTPS with failed TLS verification
+	RegistryInsecure bool
+	// RegistryUserAgent is the User-Agent string to send to the registry
+	RegistryUserAgent string
+
+	// CacheDir is the directory where the cache is stored
+	CacheDir string
 }
 
 // New creates new image extractor instance
-func New(ctx context.Context, meta config.Meta, cli config.Cli, platform specs.Platform) (*extractor.Client, error) {
+func New(ctx context.Context, opts Options) (*extractor.Client, error) {
+	logger := log.With().Str("src", opts.Source).Logger()
+
+	if opts.Platform.OS == "" || opts.Platform.Architecture == "" {
+		opts.Platform = platforms.DefaultSpec()
+		logger.Warn().Msgf("platform not set, using %s", platforms.Format(opts.Platform))
+	}
+
+	datadir := opts.CacheDir
+	if len(datadir) == 0 {
+		datadir = os.Getenv("XDG_DATA_HOME")
+		if len(datadir) == 0 {
+			home := os.Getenv("HOME")
+			if len(home) == 0 {
+				return nil, errors.New("neither XDG_DATA_HOME nor HOME was set non-empty")
+			}
+			datadir = filepath.Join(home, ".local", "share")
+		}
+	}
+
+	opts.CacheDir = filepath.Join(datadir, "undock", "cache")
+	if err := os.MkdirAll(opts.CacheDir, 0700); err != nil {
+		return nil, errors.Wrapf(err, "failed to create cache directory %q", opts.CacheDir)
+	}
+
 	return &extractor.Client{
 		Handler: &Client{
-			ctx:      ctx,
-			meta:     meta,
-			cli:      cli,
-			platform: platform,
-			logger:   log.With().Str("src", cli.Source).Logger(),
+			ctx:    ctx,
+			opts:   opts,
+			logger: logger,
 		},
 	}, nil
 }
@@ -50,7 +96,7 @@ func (c *Client) Type() string {
 func (c *Client) Extract() error {
 	c.logger.Info().Msg("Extracting source")
 
-	manblob, cachedir, err := c.cacheSource(c.cli.Source)
+	manblob, cachedir, err := c.cacheSource(c.opts.Source)
 	if err != nil {
 		return errors.Wrap(err, "cannot cache source")
 	}
@@ -69,7 +115,7 @@ func (c *Client) Extract() error {
 			return errors.Wrap(err, "cannot create OCI manifest instance from blob")
 		}
 		mans = append(mans, manifestEntry{
-			platform: c.platform,
+			platform: c.opts.Platform,
 			manifest: man,
 		})
 	} else if mtype == specs.MediaTypeImageIndex {
@@ -94,29 +140,29 @@ func (c *Client) Extract() error {
 	}
 
 	eg, _ := errgroup.WithContext(c.ctx)
-	for _, mane := range mans {
-		func(mane manifestEntry) {
+	for _, me := range mans {
+		func(me manifestEntry) {
 			eg.Go(func() error {
-				dest := c.cli.Dist
-				if !c.cli.Wrap && len(mans) > 1 {
-					dest = path.Join(c.cli.Dist, fmt.Sprintf("%s_%s%s", mane.platform.OS, mane.platform.Architecture, mane.platform.Variant))
+				dest := c.opts.Dist
+				if !c.opts.Wrap && len(mans) > 1 {
+					dest = path.Join(c.opts.Dist, fmt.Sprintf("%s_%s%s", me.platform.OS, me.platform.Architecture, me.platform.Variant))
 				}
-				for _, layer := range mane.manifest.LayerInfos() {
+				for _, layer := range me.manifest.LayerInfos() {
 					sublogger := c.logger.With().
-						Str("platform", platforms.Format(mane.platform)).
+						Str("platform", platforms.Format(me.platform)).
 						Str("media-type", layer.MediaType).
 						Str("blob", layer.Digest.String()).Logger()
 					if err = extractor.ExtractBlob(path.Join(cachedir, "blobs", layer.Digest.Algorithm().String(), layer.Digest.Hex()), dest, extractor.ExtractBlobOpts{
 						Context:  c.ctx,
 						Logger:   sublogger,
-						Includes: c.cli.Includes,
+						Includes: c.opts.Includes,
 					}); err != nil {
 						return err
 					}
 				}
 				return nil
 			})
-		}(mane)
+		}(me)
 	}
 
 	return eg.Wait()

@@ -3,12 +3,11 @@ package app
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/containerd/containerd/platforms"
 	"github.com/crazy-max/undock/internal/config"
-	ximage "github.com/crazy-max/undock/internal/extractor/image"
+	ximage "github.com/crazy-max/undock/pkg/extractor/image"
 	"github.com/crazy-max/undock/pkg/image"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -24,22 +23,6 @@ type Undock struct {
 
 // New creates new undock instance
 func New(meta config.Meta, cli config.Cli) (*Undock, error) {
-	datadir := cli.CacheDir
-	if len(datadir) == 0 {
-		datadir = os.Getenv("XDG_DATA_HOME")
-		if len(datadir) == 0 {
-			home := os.Getenv("HOME")
-			if len(home) == 0 {
-				return nil, errors.New("neither XDG_DATA_HOME nor HOME was set non-empty")
-			}
-			datadir = filepath.Join(home, ".local", "share")
-		}
-	}
-	cli.CacheDir = filepath.Join(datadir, "undock", "cache")
-	if err := os.MkdirAll(cli.CacheDir, 0700); err != nil {
-		return nil, errors.Wrapf(err, "failed to create cache directory %q", cli.CacheDir)
-	}
-
 	platform := platforms.DefaultSpec()
 	if len(cli.Platform) > 0 {
 		var err error
@@ -73,7 +56,20 @@ func (c *Undock) Start() error {
 		return errors.Errorf("unsupported source %q", c.cli.Source)
 	}
 
-	xcli, err := ximage.New(c.ctx, c.meta, c.cli, c.platform)
+	xcli, err := ximage.New(c.ctx, ximage.Options{
+		Source:   c.cli.Source,
+		Platform: c.platform,
+		Includes: c.cli.Includes,
+		All:      c.cli.All,
+
+		Dist: c.cli.Dist,
+		Wrap: c.cli.Wrap,
+
+		RegistryInsecure:  c.cli.Insecure,
+		RegistryUserAgent: c.meta.UserAgent,
+
+		CacheDir: c.cli.CacheDir,
+	})
 	if err != nil {
 		return err
 	}
