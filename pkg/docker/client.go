@@ -14,7 +14,7 @@ type Client struct {
 
 // New initializes a new Docker API client from env
 func New(ctx context.Context) (*Client, error) {
-	cli, err := dockercli.NewClientWithOpts(dockercli.FromEnv, dockercli.WithVersion("1.12"))
+	cli, err := dockercli.NewClientWithOpts(dockercli.FromEnv, dockercli.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, err
 	}
