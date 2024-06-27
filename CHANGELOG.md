@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.8.0 (2024/06/20)
+
+* Enables automatic API version negotiation for Docker client (#242)
+* Move `extractor pkg` out of internal (#224)
+* Bump github.com/alecthomas/kong to 0.9.0 (#209)
+* Bump github.com/containerd/containerd from 1.7.11 to 1.7.18 (#222 #236)
+* Bump github.com/containers/image/v5 to 5.31.1 (#188 #207 #230 #241)
+* Bump github.com/docker/docker to 26.1.4+incompatible (#223 #237)
+* Bump github.com/opencontainers/image-spec to 1.1.0 (#204)
+* Bump github.com/rs/zerolog to 1.33.0 (#200 #234)
+* Bump github.com/stretchr/testify to 1.9.0 (#205)
+* Bump golang.org/x/net from 0.22.0 to 0.23.0 (#225)
+* Bump golang.org/x/sync from 0.5.0 to 0.7.0 (#215)
+* Bump golang.org/x/sys to 0.21.0 (#214 #235)
+
 ## 0.7.0 (2023/12/21)
 
 * Docker auth config support (#186)
