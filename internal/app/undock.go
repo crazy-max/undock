@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/containerd/containerd/platforms"
+	"github.com/containerd/platforms"
 	"github.com/crazy-max/undock/internal/config"
 	ximage "github.com/crazy-max/undock/pkg/extractor/image"
 	"github.com/crazy-max/undock/pkg/image"

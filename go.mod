@@ -4,7 +4,7 @@ go 1.23.0
 
 require (
 	github.com/alecthomas/kong v0.9.0
-	github.com/containerd/containerd v1.7.18
+	github.com/containerd/platforms v0.2.1
 	github.com/containers/image/v5 v5.31.1
 	github.com/docker/docker v26.1.4+incompatible
 	github.com/mholt/archiver/v4 v4.0.0-alpha.8
