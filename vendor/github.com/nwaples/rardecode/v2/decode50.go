@@ -14,8 +14,8 @@ const (
 )
 
 var (
-	errUnknownFilter       = errors.New("rardecode: unknown V5 filter")
-	errCorruptDecodeHeader = errors.New("rardecode: corrupt decode header")
+	ErrUnknownFilter       = errors.New("rardecode: unknown V5 filter")
+	ErrCorruptDecodeHeader = errors.New("rardecode: corrupt decode header")
 )
 
 // decoder50 implements the decoder interface for RAR 5 compression.
@@ -62,7 +62,7 @@ func (d *decoder50) readBlockHeader() error {
 
 	bytecount := (flags>>3)&3 + 1
 	if bytecount == 4 {
-		return errCorruptDecodeHeader
+		return ErrCorruptDecodeHeader
 	}
 
 	hsum, err := d.br.ReadByte()
@@ -83,7 +83,7 @@ func (d *decoder50) readBlockHeader() error {
 		blockBytes |= int(n) << (i * 8)
 	}
 	if sum != hsum { // bad header checksum
-		return errCorruptDecodeHeader
+		return ErrCorruptDecodeHeader
 	}
 	blockBits += (blockBytes - 1) * 8
 
@@ -176,7 +176,7 @@ func (d *decoder50) readFilter(dr *decodeReader) error {
 	case 3:
 		fb.filter = filterArm
 	default:
-		return errUnknownFilter
+		return ErrUnknownFilter
 	}
 	return dr.queueFilter(fb)
 }
@@ -293,7 +293,7 @@ func (d *decoder50) fill(dr *decodeReader) error {
 		}
 		if err != nil {
 			if err == io.EOF {
-				return errDecoderOutOfData
+				return ErrDecoderOutOfData
 			}
 			return err
 		}

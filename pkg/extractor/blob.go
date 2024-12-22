@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mholt/archiver/v4"
+	"github.com/mholt/archives"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -29,35 +29,24 @@ func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 	}
 	defer dt.Close()
 
-	format, r, err := archiver.Identify(filename, dt)
+	format, input, err := archives.Identify(opts.Context, filename, dt)
 	if err != nil {
 		opts.Logger.Warn().Msg("Blob format not recognized")
 		return nil
 	}
-	opts.Logger.Debug().Msgf("Blob format %s detected", format.Name())
+	opts.Logger.Debug().Msgf("Blob format %s detected", format.Extension())
 
-	var u archiver.Extractor
-	var d archiver.Decompressor
-	switch format.Name() {
-	case ".zip":
-		u = archiver.Zip{}
-	case ".gz", ".tar.gz":
-		u = archiver.Tar{}
-		d = archiver.Gz{}
-	case ".tar.xz":
-		u = archiver.Tar{}
-		d = archiver.Xz{}
-	case ".zst":
-		u = archiver.Tar{}
-		d = archiver.Zstd{}
-	default:
-		return errors.Errorf("blob format not supported: %s", format.Name())
-	}
-
-	if d != nil {
-		r, err = d.OpenReader(r)
-		if err != nil {
-			return err
+	extractor, ok := format.(archives.Extractor)
+	if !ok {
+		// .gz is a special case, as it is a compressed tarball
+		if format.Extension() == ".gz" {
+			extractor = archives.Tar{}
+			input, err = archives.Gz{}.OpenReader(input)
+			if err != nil {
+				return err
+			}
+		} else {
+			return errors.Errorf("blob format not supported: %s", format.Extension())
 		}
 	}
 
@@ -68,11 +57,12 @@ func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 			pathsInArchive = append(pathsInArchive, inc)
 		}
 	}
-	if len(pathsInArchive) == 0 {
-		pathsInArchive = nil
-	}
 
-	return u.Extract(opts.Context, r, pathsInArchive, func(ctx context.Context, f archiver.File) error {
+	return extractor.Extract(opts.Context, input, func(ctx context.Context, f archives.FileInfo) error {
+		if !fileIsIncluded(pathsInArchive, f.NameInArchive) {
+			return nil
+		}
+
 		if f.FileInfo.IsDir() {
 			opts.Logger.Trace().Msgf("Extracting %s", f.NameInArchive)
 		} else {
@@ -97,7 +87,25 @@ func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 	})
 }
 
-func writeFile(ctx context.Context, path string, f archiver.File) error {
+func fileIsIncluded(filenameList []string, filename string) bool {
+	// include all files if there is no specific list
+	if len(filenameList) == 0 {
+		return true
+	}
+	for _, fn := range filenameList {
+		// exact matches are of course included
+		if filename == fn {
+			return true
+		}
+		// also consider the file included if its parent folder/path is in the list
+		if strings.HasPrefix(filename, strings.TrimSuffix(fn, "/")+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+func writeFile(ctx context.Context, path string, f archives.FileInfo) error {
 	r, err := f.Open()
 	if err != nil {
 		return err
@@ -119,7 +127,7 @@ func writeFile(ctx context.Context, path string, f archiver.File) error {
 	return err
 }
 
-func writeSymlink(_ context.Context, path string, f archiver.File) error {
+func writeSymlink(_ context.Context, path string, f archives.FileInfo) error {
 	if f.LinkTarget == "" {
 		return errors.Errorf("symlink target is empty for %s", f.Name())
 	}

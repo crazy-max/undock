@@ -32,7 +32,7 @@ func (d *lz20Decoder) init(br *rarBitReader, table []byte) error {
 	return nil
 }
 
-func (d *lz20Decoder) decodeOffset(dr *decodeReader, i int) error {
+func (d *lz20Decoder) decodeOffset(i int) error {
 	d.length = lengthBase[i] + 3
 	bits := lengthExtraBits[i]
 	if bits > 0 {
@@ -69,7 +69,7 @@ func (d *lz20Decoder) decodeOffset(dr *decodeReader, i int) error {
 	return nil
 }
 
-func (d *lz20Decoder) decodeLength(dr *decodeReader, i int) error {
+func (d *lz20Decoder) decodeLength(i int) error {
 	offset := d.offset[i]
 	copy(d.offset[1:], d.offset[:])
 	d.offset[0] = offset
@@ -100,7 +100,7 @@ func (d *lz20Decoder) decodeLength(dr *decodeReader, i int) error {
 	return nil
 }
 
-func (d *lz20Decoder) decodeShortOffset(dr *decodeReader, i int) error {
+func (d *lz20Decoder) decodeShortOffset(i int) error {
 	copy(d.offset[1:], d.offset[:])
 	offset := shortOffsetBase[i] + 1
 	bits := shortOffsetExtraBits[i]
@@ -130,15 +130,15 @@ func (d *lz20Decoder) fill(dr *decodeReader, size int64) (int64, error) {
 			n++
 			continue
 		case sym > 269:
-			err = d.decodeOffset(dr, sym-270)
+			err = d.decodeOffset(sym - 270)
 		case sym == 269:
 			return n, errEndOfBlock
 		case sym == 256: // use previous offset and length
 			copy(d.offset[1:], d.offset[:])
 		case sym < 261:
-			err = d.decodeLength(dr, sym-257)
+			err = d.decodeLength(sym - 257)
 		default:
-			err = d.decodeShortOffset(dr, sym-261)
+			err = d.decodeShortOffset(sym - 261)
 		}
 		if err != nil {
 			return n, err

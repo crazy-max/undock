@@ -129,7 +129,7 @@ func (d *lz29Decoder) readEndOfBlock() error {
 	return errEndOfFile
 }
 
-func (d *lz29Decoder) decodeLength(dr *decodeReader, i int) error {
+func (d *lz29Decoder) decodeLength(i int) error {
 	offset := d.offset[i]
 	copy(d.offset[1:i+1], d.offset[:i])
 	d.offset[0] = offset
@@ -151,7 +151,7 @@ func (d *lz29Decoder) decodeLength(dr *decodeReader, i int) error {
 	return nil
 }
 
-func (d *lz29Decoder) decodeShortOffset(dr *decodeReader, i int) error {
+func (d *lz29Decoder) decodeShortOffset(i int) error {
 	copy(d.offset[1:], d.offset[:])
 	offset := shortOffsetBase[i] + 1
 	bits := shortOffsetExtraBits[i]
@@ -167,7 +167,7 @@ func (d *lz29Decoder) decodeShortOffset(dr *decodeReader, i int) error {
 	return nil
 }
 
-func (d *lz29Decoder) decodeOffset(dr *decodeReader, i int) error {
+func (d *lz29Decoder) decodeOffset(i int) error {
 	d.length = lengthBase[i] + 3
 	bits := lengthExtraBits[i]
 	if bits > 0 {
@@ -247,11 +247,11 @@ func (d *lz29Decoder) fill(dr *decodeReader) ([]byte, error) {
 			dr.copyBytes(d.length, d.offset[0])
 			continue
 		case sym >= 271:
-			err = d.decodeOffset(dr, sym-271)
+			err = d.decodeOffset(sym - 271)
 		case sym >= 263:
-			err = d.decodeShortOffset(dr, sym-263)
+			err = d.decodeShortOffset(sym - 263)
 		case sym >= 259:
-			err = d.decodeLength(dr, sym-259)
+			err = d.decodeLength(sym - 259)
 		case sym == 256:
 			return nil, d.readEndOfBlock()
 		default: // sym == 257

@@ -12,8 +12,8 @@ const (
 )
 
 var (
-	errHuffDecodeFailed   = errors.New("rardecode: huffman decode failed")
-	errInvalidLengthTable = errors.New("rardecode: invalid huffman code length table")
+	ErrHuffDecodeFailed   = errors.New("rardecode: huffman decode failed")
+	ErrInvalidLengthTable = errors.New("rardecode: invalid huffman code length table")
 )
 
 type huffmanDecoder struct {
@@ -131,7 +131,7 @@ func (h *huffmanDecoder) readSym(r bitReader) (int, error) {
 
 	pos := int(h.pos[bits]) + int(dist)
 	if pos >= len(h.symbol) {
-		return 0, errHuffDecodeFailed
+		return 0, ErrHuffDecodeFailed
 	}
 
 	return int(h.symbol[pos]), nil
@@ -194,7 +194,7 @@ func readCodeLengthTable(br bitReader, codeLength []byte, addOld bool) error {
 		}
 		if l < 18 {
 			if i == 0 {
-				return errInvalidLengthTable
+				return ErrInvalidLengthTable
 			}
 			value = codeLength[i-1]
 		}

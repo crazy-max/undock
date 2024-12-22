@@ -32,7 +32,7 @@ func (r *rar5BitReader) ReadByte() (byte, error) {
 		r.b, err = r.r.bytes()
 		if err != nil {
 			if err == io.EOF {
-				err = errDecoderOutOfData
+				err = ErrDecoderOutOfData
 			}
 			return 0, err
 		}
@@ -67,7 +67,7 @@ func (r *rar5BitReader) readBits(n uint8) (int, error) {
 			if err != nil {
 				if err == io.EOF {
 					// io.EOF before we reached bit limit
-					err = errDecoderOutOfData
+					err = ErrDecoderOutOfData
 				}
 				return 0, err
 			}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/bodgit/sevenzip/internal/aes7z"
 	"github.com/bodgit/sevenzip/internal/bcj2"
+	"github.com/bodgit/sevenzip/internal/bra"
 	"github.com/bodgit/sevenzip/internal/brotli"
 	"github.com/bodgit/sevenzip/internal/bzip2"
 	"github.com/bodgit/sevenzip/internal/deflate"
@@ -23,12 +24,16 @@ import (
 // one io.ReadCloser's providing the stream(s) of bytes.
 type Decompressor func([]byte, uint64, []io.ReadCloser) (io.ReadCloser, error)
 
-//nolint:gochecknoglobals
-var decompressors sync.Map
+var (
+	//nolint:gochecknoglobals
+	decompressors sync.Map
+
+	errNeedOneReader = errors.New("copy: need exactly one reader")
+)
 
 func newCopyReader(_ []byte, _ uint64, readers []io.ReadCloser) (io.ReadCloser, error) {
 	if len(readers) != 1 {
-		return nil, errors.New("sevenzip: need exactly one reader")
+		return nil, errNeedOneReader
 	}
 	// just return the passed io.ReadCloser)
 	return readers[0], nil
@@ -42,8 +47,16 @@ func init() {
 	RegisterDecompressor([]byte{0x03}, Decompressor(delta.NewReader))
 	// LZMA
 	RegisterDecompressor([]byte{0x03, 0x01, 0x01}, Decompressor(lzma.NewReader))
+	// BCJ
+	RegisterDecompressor([]byte{0x03, 0x03, 0x01, 0x03}, Decompressor(bra.NewBCJReader))
 	// BCJ2
 	RegisterDecompressor([]byte{0x03, 0x03, 0x01, 0x1b}, Decompressor(bcj2.NewReader))
+	// PPC
+	RegisterDecompressor([]byte{0x03, 0x03, 0x02, 0x05}, Decompressor(bra.NewPPCReader))
+	// ARM
+	RegisterDecompressor([]byte{0x03, 0x03, 0x05, 0x01}, Decompressor(bra.NewARMReader))
+	// SPARC
+	RegisterDecompressor([]byte{0x03, 0x03, 0x08, 0x05}, Decompressor(bra.NewSPARCReader))
 	// Deflate
 	RegisterDecompressor([]byte{0x04, 0x01, 0x08}, Decompressor(deflate.NewReader))
 	// Bzip2
