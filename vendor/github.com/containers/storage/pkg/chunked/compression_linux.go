@@ -2,16 +2,22 @@ package chunked
 
 import (
 	archivetar "archive/tar"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"strconv"
+	"time"
 
 	"github.com/containers/storage/pkg/chunked/internal"
 	"github.com/klauspost/compress/zstd"
 	"github.com/klauspost/pgzip"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/vbatts/tar-split/archive/tar"
+	"github.com/vbatts/tar-split/tar/asm"
+	"github.com/vbatts/tar-split/tar/storage"
+	expMaps "golang.org/x/exp/maps"
 )
 
 var typesToTar = map[string]byte{
@@ -133,7 +139,7 @@ func readEstargzChunkedManifest(blobStream ImageSourceSeekable, blobSize int64, 
 }
 
 // readZstdChunkedManifest reads the zstd:chunked manifest from the seekable stream blobStream.
-// Returns (manifest blob, parsed manifest, tar-split blob, manifest offset).
+// Returns (manifest blob, parsed manifest, tar-split blob or nil, manifest offset).
 func readZstdChunkedManifest(blobStream ImageSourceSeekable, tocDigest digest.Digest, annotations map[string]string) ([]byte, *internal.TOC, []byte, int64, error) {
 	offsetMetadata := annotations[internal.ManifestInfoKey]
 	if offsetMetadata == "" {
@@ -208,19 +214,192 @@ func readZstdChunkedManifest(blobStream ImageSourceSeekable, tocDigest digest.Di
 		return nil, nil, nil, 0, fmt.Errorf("unmarshaling TOC: %w", err)
 	}
 
-	decodedTarSplit := []byte{}
-	if tarSplitChunk.Offset > 0 {
+	var decodedTarSplit []byte = nil
+	if toc.TarSplitDigest != "" {
+		if tarSplitChunk.Offset <= 0 {
+			return nil, nil, nil, 0, fmt.Errorf("TOC requires a tar-split, but the %s annotation does not describe a position", internal.TarSplitInfoKey)
+		}
 		tarSplit, err := readBlob(tarSplitChunk.Length)
 		if err != nil {
 			return nil, nil, nil, 0, err
 		}
-
 		decodedTarSplit, err = decodeAndValidateBlob(tarSplit, tarSplitLengthUncompressed, toc.TarSplitDigest.String())
 		if err != nil {
 			return nil, nil, nil, 0, fmt.Errorf("validating and decompressing tar-split: %w", err)
 		}
+		// We use the TOC for creating on-disk files, but the tar-split for creating metadata
+		// when exporting the layer contents. Ensure the two match, otherwise local inspection of a container
+		// might be misleading about the exported contents.
+		if err := ensureTOCMatchesTarSplit(toc, decodedTarSplit); err != nil {
+			return nil, nil, nil, 0, fmt.Errorf("tar-split and TOC data is inconsistent: %w", err)
+		}
+	} else if tarSplitChunk.Offset > 0 {
+		// We must ignore the tar-split when the digest is not present in the TOC, because we can’t authenticate it.
+		//
+		// But if we asked for the chunk, now we must consume the data to not block the producer.
+		// Ideally the GetBlobAt API should be changed so that this is not necessary.
+		_, err := readBlob(tarSplitChunk.Length)
+		if err != nil {
+			return nil, nil, nil, 0, err
+		}
 	}
 	return decodedBlob, toc, decodedTarSplit, int64(manifestChunk.Offset), err
+}
+
+// ensureTOCMatchesTarSplit validates that toc and tarSplit contain _exactly_ the same entries.
+func ensureTOCMatchesTarSplit(toc *internal.TOC, tarSplit []byte) error {
+	pendingFiles := map[string]*internal.FileMetadata{} // Name -> an entry in toc.Entries
+	for i := range toc.Entries {
+		e := &toc.Entries[i]
+		if e.Type != internal.TypeChunk {
+			if _, ok := pendingFiles[e.Name]; ok {
+				return fmt.Errorf("TOC contains duplicate entries for path %q", e.Name)
+			}
+			pendingFiles[e.Name] = e
+		}
+	}
+
+	unpacker := storage.NewJSONUnpacker(bytes.NewReader(tarSplit))
+	if err := asm.IterateHeaders(unpacker, func(hdr *tar.Header) error {
+		e, ok := pendingFiles[hdr.Name]
+		if !ok {
+			return fmt.Errorf("tar-split contains an entry for %q missing in TOC", hdr.Name)
+		}
+		delete(pendingFiles, hdr.Name)
+		expected, err := internal.NewFileMetadata(hdr)
+		if err != nil {
+			return fmt.Errorf("determining expected metadata for %q: %w", hdr.Name, err)
+		}
+		if err := ensureFileMetadataAttributesMatch(e, &expected); err != nil {
+			return fmt.Errorf("TOC and tar-split metadata doesn’t match: %w", err)
+		}
+
+		return nil
+	}); err != nil {
+		return err
+	}
+	if len(pendingFiles) != 0 {
+		remaining := expMaps.Keys(pendingFiles)
+		if len(remaining) > 5 {
+			remaining = remaining[:5] // Just to limit the size of the output.
+		}
+		return fmt.Errorf("TOC contains entries not present in tar-split, incl. %q", remaining)
+	}
+	return nil
+}
+
+// tarSizeFromTarSplit computes the total tarball size, using only the tarSplit metadata
+func tarSizeFromTarSplit(tarSplit []byte) (int64, error) {
+	var res int64 = 0
+
+	unpacker := storage.NewJSONUnpacker(bytes.NewReader(tarSplit))
+	for {
+		entry, err := unpacker.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return -1, fmt.Errorf("reading tar-split entries: %w", err)
+		}
+		switch entry.Type {
+		case storage.SegmentType:
+			res += int64(len(entry.Payload))
+		case storage.FileType:
+			// entry.Size is the “logical size”, which might not be the physical size for sparse entries;
+			// but the way tar-split/tar/asm.WriteOutputTarStream combines FileType entries and returned files contents,
+			// sparse files are not supported.
+			// Also https://github.com/opencontainers/image-spec/blob/main/layer.md says
+			// > Sparse files SHOULD NOT be used because they lack consistent support across tar implementations.
+			res += entry.Size
+		default:
+			return -1, fmt.Errorf("unexpected tar-split entry type %q", entry.Type)
+		}
+	}
+	return res, nil
+}
+
+// ensureTimePointersMatch ensures that a and b are equal
+func ensureTimePointersMatch(a, b *time.Time) error {
+	// We didn’t always use “timeIfNotZero” when creating the TOC, so treat time.IsZero the same as nil.
+	// The archive/tar code turns time.IsZero() timestamps into an Unix timestamp of 0 when writing, but turns an Unix timestamp of 0
+	// when writing into a (local-timezone) Jan 1 1970, which is not IsZero(). So, treat that the same as IsZero as well.
+	unixZero := time.Unix(0, 0)
+	if a != nil && (a.IsZero() || a.Equal(unixZero)) {
+		a = nil
+	}
+	if b != nil && (b.IsZero() || b.Equal(unixZero)) {
+		b = nil
+	}
+	switch {
+	case a == nil && b == nil:
+		return nil
+	case a == nil:
+		return fmt.Errorf("nil != %v", *b)
+	case b == nil:
+		return fmt.Errorf("%v != nil", *a)
+	default:
+		if a.Equal(*b) {
+			return nil
+		}
+		return fmt.Errorf("%v != %v", *a, *b)
+	}
+}
+
+// ensureFileMetadataAttributesMatch ensures that a and b match in file attributes (it ignores entries relevant to locating data
+// in the tar stream or matching contents)
+func ensureFileMetadataAttributesMatch(a, b *internal.FileMetadata) error {
+	// Keep this in sync with internal.FileMetadata!
+
+	if a.Type != b.Type {
+		return fmt.Errorf("mismatch of Type: %q != %q", a.Type, b.Type)
+	}
+	if a.Name != b.Name {
+		return fmt.Errorf("mismatch of Name: %q != %q", a.Name, b.Name)
+	}
+	if a.Linkname != b.Linkname {
+		return fmt.Errorf("mismatch of Linkname: %q != %q", a.Linkname, b.Linkname)
+	}
+	if a.Mode != b.Mode {
+		return fmt.Errorf("mismatch of Mode: %q != %q", a.Mode, b.Mode)
+	}
+	if a.Size != b.Size {
+		return fmt.Errorf("mismatch of Size: %q != %q", a.Size, b.Size)
+	}
+	if a.UID != b.UID {
+		return fmt.Errorf("mismatch of UID: %q != %q", a.UID, b.UID)
+	}
+	if a.GID != b.GID {
+		return fmt.Errorf("mismatch of GID: %q != %q", a.GID, b.GID)
+	}
+
+	if err := ensureTimePointersMatch(a.ModTime, b.ModTime); err != nil {
+		return fmt.Errorf("mismatch of ModTime: %w", err)
+	}
+	if err := ensureTimePointersMatch(a.AccessTime, b.AccessTime); err != nil {
+		return fmt.Errorf("mismatch of AccessTime: %w", err)
+	}
+	if err := ensureTimePointersMatch(a.ChangeTime, b.ChangeTime); err != nil {
+		return fmt.Errorf("mismatch of ChangeTime: %w", err)
+	}
+	if a.Devmajor != b.Devmajor {
+		return fmt.Errorf("mismatch of Devmajor: %q != %q", a.Devmajor, b.Devmajor)
+	}
+	if a.Devminor != b.Devminor {
+		return fmt.Errorf("mismatch of Devminor: %q != %q", a.Devminor, b.Devminor)
+	}
+	if !maps.Equal(a.Xattrs, b.Xattrs) {
+		return fmt.Errorf("mismatch of Xattrs: %q != %q", a.Xattrs, b.Xattrs)
+	}
+
+	// Digest is not compared
+	// Offset is not compared
+	// EndOffset is not compared
+
+	// ChunkSize is not compared
+	// ChunkOffset is not compared
+	// ChunkDigest is not compared
+	// ChunkType is not compared
+	return nil
 }
 
 func decodeAndValidateBlob(blob []byte, lengthUncompressed uint64, expectedCompressedChecksum string) ([]byte, error) {
