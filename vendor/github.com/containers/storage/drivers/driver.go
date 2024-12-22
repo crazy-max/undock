@@ -189,13 +189,14 @@ type Driver interface {
 type DriverWithDifferOutput struct {
 	Differ             Differ
 	Target             string
-	Size               int64
+	Size               int64 // Size of the uncompressed layer, -1 if unknown. Must be known if UncompressedDigest is set.
 	UIDs               []uint32
 	GIDs               []uint32
 	UncompressedDigest digest.Digest
+	CompressedDigest   digest.Digest
 	Metadata           string
 	BigData            map[string][]byte
-	TarSplit           []byte
+	TarSplit           []byte // nil if not available
 	TOCDigest          digest.Digest
 	// RootDirMode is the mode of the root directory of the layer, if specified.
 	RootDirMode *os.FileMode
@@ -215,20 +216,25 @@ const (
 	DifferOutputFormatFlat
 )
 
+// DifferFsVerity is a part of the experimental Differ interface and should not be used from outside of c/storage.
+// It configures the fsverity requirement.
 type DifferFsVerity int
 
 const (
 	// DifferFsVerityDisabled means no fs-verity is used
 	DifferFsVerityDisabled = iota
 
-	// DifferFsVerityEnabled means fs-verity is used when supported
-	DifferFsVerityEnabled
+	// DifferFsVerityIfAvailable means fs-verity is used when supported by
+	// the underlying kernel and filesystem.
+	DifferFsVerityIfAvailable
 
-	// DifferFsVerityRequired means fs-verity is required
+	// DifferFsVerityRequired means fs-verity is required.  Note this is not
+	// currently set or exposed by the overlay driver.
 	DifferFsVerityRequired
 )
 
-// DifferOptions overrides how the differ work
+// DifferOptions is a part of the experimental Differ interface and should not be used from outside of c/storage.
+// It overrides how the differ works.
 type DifferOptions struct {
 	// Format defines the destination directory layout format
 	Format DifferOutputFormat
@@ -248,8 +254,8 @@ type Differ interface {
 type DriverWithDiffer interface {
 	Driver
 	// ApplyDiffWithDiffer applies the changes using the callback function.
-	// If id is empty, then a staging directory is created.  The staging directory is guaranteed to be usable with ApplyDiffFromStagingDirectory.
-	ApplyDiffWithDiffer(id, parent string, options *ApplyDiffWithDifferOpts, differ Differ) (output DriverWithDifferOutput, err error)
+	// The staging directory created by this function is guaranteed to be usable with ApplyDiffFromStagingDirectory.
+	ApplyDiffWithDiffer(options *ApplyDiffWithDifferOpts, differ Differ) (output DriverWithDifferOutput, err error)
 	// ApplyDiffFromStagingDirectory applies the changes using the diffOutput target directory.
 	ApplyDiffFromStagingDirectory(id, parent string, diffOutput *DriverWithDifferOutput, options *ApplyDiffWithDifferOpts) error
 	// CleanupStagingDirectory cleanups the staging directory.  It can be used to cleanup the staging directory on errors
@@ -377,8 +383,6 @@ type Options struct {
 	ImageStore          string
 	DriverPriority      []string
 	DriverOptions       []string
-	UIDMaps             []idtools.IDMap
-	GIDMaps             []idtools.IDMap
 	ExperimentalEnabled bool
 }
 
@@ -492,7 +496,7 @@ func driverPut(driver ProtoDriver, id string, mainErr *error) {
 		if *mainErr == nil {
 			*mainErr = err
 		} else {
-			logrus.Errorf(err.Error())
+			logrus.Error(err)
 		}
 	}
 }
