@@ -30,13 +30,13 @@ type Rar struct {
 	Password string
 }
 
-func (Rar) Name() string { return ".rar" }
+func (Rar) Extension() string { return ".rar" }
 
-func (r Rar) Match(filename string, stream io.Reader) (MatchResult, error) {
+func (r Rar) Match(_ context.Context, filename string, stream io.Reader) (MatchResult, error) {
 	var mr MatchResult
 
 	// match filename
-	if strings.Contains(strings.ToLower(filename), r.Name()) {
+	if strings.Contains(strings.ToLower(filename), r.Extension()) {
 		mr.ByName = true
 	}
 
@@ -56,12 +56,9 @@ func (r Rar) Match(filename string, stream io.Reader) (MatchResult, error) {
 	return mr, nil
 }
 
-// Archive is not implemented for RAR, but the method exists so that Rar satisfies the ArchiveFormat interface.
-func (r Rar) Archive(_ context.Context, _ io.Writer, _ []File) error {
-	return fmt.Errorf("not implemented because RAR is a proprietary format")
-}
+// Archive is not implemented for RAR because it is patent-encumbered.
 
-func (r Rar) Extract(ctx context.Context, sourceArchive io.Reader, pathsInArchive []string, handleFile FileHandler) error {
+func (r Rar) Extract(ctx context.Context, sourceArchive io.Reader, handleFile FileHandler) error {
 	var options []rardecode.Option
 	if r.Password != "" {
 		options = append(options, rardecode.Password(r.Password))
@@ -91,22 +88,24 @@ func (r Rar) Extract(ctx context.Context, sourceArchive io.Reader, pathsInArchiv
 			}
 			return err
 		}
-		if !fileIsIncluded(pathsInArchive, hdr.Name) {
-			continue
-		}
 		if fileIsIncluded(skipDirs, hdr.Name) {
 			continue
 		}
 
-		file := File{
-			FileInfo:      rarFileInfo{hdr},
+		info := rarFileInfo{hdr}
+		file := FileInfo{
+			FileInfo:      info,
 			Header:        hdr,
 			NameInArchive: hdr.Name,
-			Open:          func() (io.ReadCloser, error) { return io.NopCloser(rr), nil },
+			Open: func() (fs.File, error) {
+				return fileInArchive{io.NopCloser(rr), info}, nil
+			},
 		}
 
 		err = handleFile(ctx, file)
-		if errors.Is(err, fs.SkipDir) {
+		if errors.Is(err, fs.SkipAll) {
+			break
+		} else if errors.Is(err, fs.SkipDir) {
 			// if a directory, skip this path; if a file, skip the folder path
 			dirPath := hdr.Name
 			if !hdr.IsDir {
@@ -131,9 +130,12 @@ func (rfi rarFileInfo) Size() int64        { return rfi.fh.UnPackedSize }
 func (rfi rarFileInfo) Mode() os.FileMode  { return rfi.fh.Mode() }
 func (rfi rarFileInfo) ModTime() time.Time { return rfi.fh.ModificationTime }
 func (rfi rarFileInfo) IsDir() bool        { return rfi.fh.IsDir }
-func (rfi rarFileInfo) Sys() interface{}   { return nil }
+func (rfi rarFileInfo) Sys() any           { return nil }
 
 var (
 	rarHeaderV1_5 = []byte("Rar!\x1a\x07\x00")     // v1.5
 	rarHeaderV5_0 = []byte("Rar!\x1a\x07\x01\x00") // v5.0
 )
+
+// Interface guard
+var _ Extractor = Rar{}

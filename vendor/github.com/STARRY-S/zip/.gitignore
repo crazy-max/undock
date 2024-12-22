@@ -1,0 +1,16 @@
+# Generated files
+*.out
+*.converted
+*.txt
+!NOTICE.txt
+tmp*
+
+# Test archive files
+*.zip
+
+# VSCode config
+/.vscode/
+
+# macOS trash
+.DS_Store
+._.DS_Store

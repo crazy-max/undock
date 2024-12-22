@@ -28,12 +28,12 @@ const (
 )
 
 var (
-	errShortFile        = errors.New("rardecode: decoded file too short")
-	errInvalidFileBlock = errors.New("rardecode: invalid file block")
-	errUnexpectedArcEnd = errors.New("rardecode: unexpected end of archive")
-	errBadFileChecksum  = errors.New("rardecode: bad file checksum")
-	errSolidOpen        = errors.New("rardecode: solid files don't support Open")
-	errUnknownArc       = errors.New("rardecode: unknown archive version")
+	ErrShortFile        = errors.New("rardecode: decoded file too short")
+	ErrInvalidFileBlock = errors.New("rardecode: invalid file block")
+	ErrUnexpectedArcEnd = errors.New("rardecode: unexpected end of archive")
+	ErrBadFileChecksum  = errors.New("rardecode: bad file checksum")
+	ErrSolidOpen        = errors.New("rardecode: solid files don't support Open")
+	ErrUnknownVersion   = errors.New("rardecode: unknown archive version")
 )
 
 // FileHeader represents a single file in a RAR archive.
@@ -140,12 +140,12 @@ func (f *packedFileReader) nextBlock() error {
 	if err != nil {
 		if err == io.EOF {
 			// archive ended, but file hasn't
-			return errUnexpectedArcEnd
+			return ErrUnexpectedArcEnd
 		}
 		return err
 	}
 	if h.first || h.Name != f.h.Name {
-		return errInvalidFileBlock
+		return ErrInvalidFileBlock
 	}
 	f.n = h.PackedSize
 	f.h = h
@@ -167,7 +167,7 @@ func (f *packedFileReader) next() (*fileBlockHeader, error) {
 		return nil, err
 	}
 	if !f.h.first {
-		return nil, errInvalidFileBlock
+		return nil, ErrInvalidFileBlock
 	}
 	f.n = f.h.PackedSize
 	return f.h, nil
@@ -297,7 +297,7 @@ func (cr *checksumReader) eofError() error {
 		}
 	}
 	if !bytes.Equal(sum, h.sum) {
-		return errBadFileChecksum
+		return ErrBadFileChecksum
 	}
 	return io.EOF
 }
@@ -421,7 +421,7 @@ func (r *Reader) nextFile() error {
 	}
 	if h.UnPackedSize >= 0 && !h.UnKnownSize {
 		// Limit reading to UnPackedSize as there may be padding
-		r.r = &limitedReader{r.r, h.UnPackedSize, errShortFile}
+		r.r = &limitedReader{r.r, h.UnPackedSize, ErrShortFile}
 	}
 	if h.hash != nil {
 		r.r = &checksumReader{r.r, h.hash(), r.pr}
@@ -471,7 +471,7 @@ type File struct {
 // contents instead.
 func (f *File) Open() (io.ReadCloser, error) {
 	if f.Solid {
-		return nil, errSolidOpen
+		return nil, ErrSolidOpen
 	}
 	r := new(ReadCloser)
 	r.pr = f.pr.clone()

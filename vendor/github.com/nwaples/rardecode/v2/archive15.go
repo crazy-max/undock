@@ -17,6 +17,7 @@ const (
 	// block types
 	blockArc     = 0x73
 	blockFile    = 0x74
+	blockComment = 0x75
 	blockService = 0x7a
 	blockEnd     = 0x7b
 
@@ -25,6 +26,7 @@ const (
 
 	// archive block flags
 	arcVolume    = 0x0001
+	arcComment   = 0x0002
 	arcSolid     = 0x0008
 	arcNewNaming = 0x0010
 	arcEncrypted = 0x0080
@@ -50,7 +52,7 @@ const (
 )
 
 var (
-	errUnsupportedDecoder = errors.New("rardecode: unsupported decoder version")
+	ErrUnsupportedDecoder = errors.New("rardecode: unsupported decoder version")
 )
 
 type blockHeader15 struct {
@@ -255,7 +257,7 @@ func (a *archive15) parseFileHeader(h *blockHeader15) (*fileBlockHeader, error) 
 
 	b := h.data
 	if len(b) < 21 {
-		return nil, errCorruptFileHeader
+		return nil, ErrCorruptFileHeader
 	}
 
 	f.PackedSize = h.dataSize
@@ -273,7 +275,7 @@ func (a *archive15) parseFileHeader(h *blockHeader15) (*fileBlockHeader, error) 
 	f.Attributes = int64(b.uint32())
 	if h.flags&fileLargeData > 0 {
 		if len(b) < 8 {
-			return nil, errCorruptFileHeader
+			return nil, ErrCorruptFileHeader
 		}
 		_ = b.uint32() // already read large PackedSize in readBlockHeader
 		f.UnPackedSize |= int64(b.uint32()) << 32
@@ -283,7 +285,7 @@ func (a *archive15) parseFileHeader(h *blockHeader15) (*fileBlockHeader, error) 
 		f.UnPackedSize = -1
 	}
 	if len(b) < namesize {
-		return nil, errCorruptFileHeader
+		return nil, ErrCorruptFileHeader
 	}
 	name := b.bytes(namesize)
 	if h.flags&fileUnicode == 0 {
@@ -309,7 +311,7 @@ func (a *archive15) parseFileHeader(h *blockHeader15) (*fileBlockHeader, error) 
 	var salt []byte
 	if h.flags&fileSalt > 0 {
 		if len(b) < saltSize {
-			return nil, errCorruptFileHeader
+			return nil, ErrCorruptFileHeader
 		}
 		salt = b.bytes(saltSize)
 	}
@@ -328,13 +330,13 @@ func (a *archive15) parseFileHeader(h *blockHeader15) (*fileBlockHeader, error) 
 	if method != 0 {
 		switch unpackver {
 		case 15:
-			return nil, errUnsupportedDecoder
+			return nil, ErrUnsupportedDecoder
 		case 20, 26:
 			f.decVer = decode20Ver
 		case 29:
 			f.decVer = decode29Ver
 		default:
-			return nil, errUnknownDecoder
+			return nil, ErrUnknownDecoder
 		}
 	}
 	return f, nil
@@ -366,8 +368,14 @@ func (a *archive15) readBlockHeader(r sliceReader) (*blockHeader15, error) {
 	h.htype = b.byte()
 	h.flags = b.uint16()
 	size := int(b.uint16())
-	if size < 7 {
-		return nil, errCorruptHeader
+	if h.htype == blockArc && h.flags&arcComment > 0 {
+		// comment block embedded into archive block
+		if size < 13 {
+			return nil, ErrCorruptBlockHeader
+		}
+		size = 13
+	} else if size < 7 {
+		return nil, ErrCorruptBlockHeader
 	}
 	h.data, err = r.readSlice(size)
 	if err != nil {
@@ -377,20 +385,27 @@ func (a *archive15) readBlockHeader(r sliceReader) (*blockHeader15, error) {
 		return nil, err
 	}
 	hash := crc32.NewIEEE()
-	_, _ = hash.Write(h.data[2:]) // Write should always succeed
+	if h.htype == blockComment {
+		if size < 13 {
+			return nil, ErrCorruptBlockHeader
+		}
+		_, _ = hash.Write(h.data[2:13])
+	} else {
+		_, _ = hash.Write(h.data[2:])
+	}
 	if crc != uint16(hash.Sum32()) {
-		return nil, errBadHeaderCrc
+		return nil, ErrBadHeaderCRC
 	}
 	h.data = h.data[7:]
 	if h.flags&blockHasData > 0 {
 		if len(h.data) < 4 {
-			return nil, errCorruptHeader
+			return nil, ErrCorruptBlockHeader
 		}
 		h.dataSize = int64(h.data.uint32())
 	}
 	if (h.htype == blockService || h.htype == blockFile) && h.flags&fileLargeData > 0 {
 		if len(h.data) < 25 {
-			return nil, errCorruptHeader
+			return nil, ErrCorruptBlockHeader
 		}
 		b := h.data[21:25]
 		h.dataSize |= int64(b.uint32()) << 32

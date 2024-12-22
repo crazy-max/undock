@@ -65,7 +65,7 @@ func readCodeLengthTable20(br *rarBitReader, table []byte) error {
 		}
 		if l == 16 {
 			if i == 0 {
-				return errInvalidLengthTable
+				return ErrInvalidLengthTable
 			}
 			var n int
 			n, err = br.readBits(2)
@@ -104,7 +104,6 @@ func readCodeLengthTable20(br *rarBitReader, table []byte) error {
 }
 
 func (d *decoder20) readBlockHeader() error {
-	d.br.alignByte()
 	n, err := d.br.readBits(1)
 	if err != nil {
 		return err
@@ -156,7 +155,7 @@ func (d *decoder20) fill(dr *decodeReader) error {
 			d.hdrRead = false
 			continue
 		case io.EOF:
-			err = errDecoderOutOfData
+			err = ErrDecoderOutOfData
 		}
 		return err
 	}

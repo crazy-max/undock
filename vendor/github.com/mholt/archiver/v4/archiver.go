@@ -12,14 +12,14 @@ import (
 	"time"
 )
 
-// File is a virtualized, generalized file abstraction for interacting with archives.
-type File struct {
+// FileInfo is a virtualized, generalized file abstraction for interacting with archives.
+type FileInfo struct {
 	fs.FileInfo
 
 	// The file header as used/provided by the archive format.
 	// Typically, you do not need to set this field when creating
 	// an archive.
-	Header interface{}
+	Header any
 
 	// The path of the file as it appears in the archive.
 	// This is equivalent to Header.Name (for most Header
@@ -27,6 +27,15 @@ type File struct {
 	// it is such a common field and we want to preserve
 	// format-agnosticism (no type assertions) for basic
 	// operations.
+	//
+	// When extracting, this name or path may not have
+	// been sanitized; it should not be trusted at face
+	// value. Consider using path.Clean() before using.
+	//
+	// EXPERIMENTAL: If inserting a file into an archive,
+	// and this is left blank, the implementation of the
+	// archive format can default to using the file's base
+	// name.
 	NameInArchive string
 
 	// For symbolic and hard links, the target of the link.
@@ -35,12 +44,11 @@ type File struct {
 
 	// A callback function that opens the file to read its
 	// contents. The file must be closed when reading is
-	// complete. Nil for files that don't have content
-	// (such as directories and links).
-	Open func() (io.ReadCloser, error)
+	// complete.
+	Open func() (fs.File, error)
 }
 
-func (f File) Stat() (fs.FileInfo, error) { return f.FileInfo, nil }
+func (f FileInfo) Stat() (fs.FileInfo, error) { return f.FileInfo, nil }
 
 // FilesFromDisk returns a list of files by walking the directories in the
 // given filenames map. The keys are the names on disk, and the values are
@@ -63,8 +71,8 @@ func (f File) Stat() (fs.FileInfo, error) { return f.FileInfo, nil }
 //
 // This function is used primarily when preparing a list of files to add to
 // an archive.
-func FilesFromDisk(options *FromDiskOptions, filenames map[string]string) ([]File, error) {
-	var files []File
+func FilesFromDisk(options *FromDiskOptions, filenames map[string]string) ([]FileInfo, error) {
+	var files []FileInfo
 	for rootOnDisk, rootInArchive := range filenames {
 		walkErr := filepath.WalkDir(rootOnDisk, func(filename string, d fs.DirEntry, err error) error {
 			if err != nil {
@@ -109,11 +117,11 @@ func FilesFromDisk(options *FromDiskOptions, filenames map[string]string) ([]Fil
 				info = noAttrFileInfo{info}
 			}
 
-			file := File{
+			file := FileInfo{
 				FileInfo:      info,
 				NameInArchive: nameInArchive,
 				LinkTarget:    linkTarget,
-				Open: func() (io.ReadCloser, error) {
+				Open: func() (fs.File, error) {
 					return os.Open(filename)
 				},
 			}
@@ -186,7 +194,7 @@ func (no noAttrFileInfo) Mode() fs.FileMode {
 	return no.FileInfo.Mode() & (fs.ModeType | fs.ModePerm)
 }
 func (noAttrFileInfo) ModTime() time.Time { return time.Time{} }
-func (noAttrFileInfo) Sys() interface{}   { return nil }
+func (noAttrFileInfo) Sys() any           { return nil }
 
 // FromDiskOptions specifies various options for gathering files from disk.
 type FromDiskOptions struct {
@@ -210,19 +218,25 @@ type FromDiskOptions struct {
 // archive contents are not necessarily ordered, skipping directories requires
 // memory, and skipping lots of directories may run up your memory bill.
 //
-// Any other returned error will terminate a walk.
-type FileHandler func(ctx context.Context, f File) error
+// Any other returned error will terminate a walk and be returned to the caller.
+type FileHandler func(ctx context.Context, info FileInfo) error
 
 // openAndCopyFile opens file for reading, copies its
 // contents to w, then closes file.
-func openAndCopyFile(file File, w io.Writer) error {
+func openAndCopyFile(file FileInfo, w io.Writer) error {
 	fileReader, err := file.Open()
 	if err != nil {
 		return err
 	}
 	defer fileReader.Close()
+	// When file is in use and size is being written to, creating the compressed
+	// file will fail with "archive/tar: write too long." Using CopyN gracefully
+	// handles this.
 	_, err = io.Copy(w, fileReader)
-	return err
+	if err != nil && err != io.EOF {
+		return err
+	}
+	return nil
 }
 
 // fileIsIncluded returns true if filename is included according to
@@ -248,6 +262,26 @@ func fileIsIncluded(filenameList []string, filename string) bool {
 
 func isSymlink(info fs.FileInfo) bool {
 	return info.Mode()&os.ModeSymlink != 0
+}
+
+// streamSizeBySeeking determines the size of the stream by
+// seeking to the end, then back again, so the resulting
+// seek position upon returning is the same as when called
+// (assuming no errors).
+func streamSizeBySeeking(s io.Seeker) (int64, error) {
+	currentPosition, err := s.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return 0, fmt.Errorf("getting current offset: %w", err)
+	}
+	maxPosition, err := s.Seek(0, io.SeekEnd)
+	if err != nil {
+		return 0, fmt.Errorf("fast-forwarding to end: %w", err)
+	}
+	_, err = s.Seek(currentPosition, io.SeekStart)
+	if err != nil {
+		return 0, fmt.Errorf("returning to prior offset %d: %w", currentPosition, err)
+	}
+	return maxPosition, nil
 }
 
 // skipList keeps a list of non-intersecting paths

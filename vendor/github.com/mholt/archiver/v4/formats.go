@@ -12,7 +12,7 @@ import (
 // RegisterFormat registers a format. It should be called during init.
 // Duplicate formats by name are not allowed and will panic.
 func RegisterFormat(format Format) {
-	name := strings.Trim(strings.ToLower(format.Name()), ".")
+	name := strings.Trim(strings.ToLower(format.Extension()), ".")
 	if _, ok := formats[name]; ok {
 		panic("format " + name + " is already registered")
 	}
@@ -32,23 +32,31 @@ func RegisterFormat(format Format) {
 //
 // If stream is non-nil then the returned io.Reader will always be
 // non-nil and will read from the same point as the reader which was
-// passed in; it should be used in place of the input stream after
+// passed in. If the input stream is not an io.Seeker, the returned
+// io.Reader value should be used in place of the input stream after
 // calling Identify() because it preserves and re-reads the bytes that
 // were already read during the identification process.
-func Identify(filename string, stream io.Reader) (Format, io.Reader, error) {
+//
+// If the input stream is an io.Seeker, Seek() must work, and the
+// original input value will be returned instead of a wrapper value.
+func Identify(ctx context.Context, filename string, stream io.Reader) (Format, io.Reader, error) {
 	var compression Compression
 	var archival Archival
+	var extraction Extraction
 
-	rewindableStream := newRewindReader(stream)
+	rewindableStream, err := newRewindReader(stream)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	// try compression format first, since that's the outer "layer"
+	// try compression format first, since that's the outer "layer" if combined
 	for name, format := range formats {
 		cf, isCompression := format.(Compression)
 		if !isCompression {
 			continue
 		}
 
-		matchResult, err := identifyOne(format, filename, rewindableStream, nil)
+		matchResult, err := identifyOne(ctx, format, filename, rewindableStream, nil)
 		if err != nil {
 			return nil, rewindableStream.reader(), fmt.Errorf("matching %s: %w", name, err)
 		}
@@ -61,40 +69,48 @@ func Identify(filename string, stream io.Reader) (Format, io.Reader, error) {
 		}
 	}
 
-	// try archive format next
+	// try archival and extraction format next
 	for name, format := range formats {
-		af, isArchive := format.(Archival)
-		if !isArchive {
+		ar, isArchive := format.(Archival)
+		ex, isExtract := format.(Extraction)
+		if !isArchive && !isExtract {
 			continue
 		}
 
-		matchResult, err := identifyOne(format, filename, rewindableStream, compression)
+		matchResult, err := identifyOne(ctx, format, filename, rewindableStream, compression)
 		if err != nil {
 			return nil, rewindableStream.reader(), fmt.Errorf("matching %s: %w", name, err)
 		}
 
 		if matchResult.Matched() {
-			archival = af
+			archival = ar
+			extraction = ex
 			break
 		}
 	}
 
-	// the stream should be rewound by identifyOne
+	// the stream should be rewound by identifyOne; then return the most specific type of match
 	bufferedStream := rewindableStream.reader()
 	switch {
-	case compression != nil && archival == nil:
+	case compression != nil && archival == nil && extraction == nil:
 		return compression, bufferedStream, nil
-	case compression == nil && archival != nil:
+	case compression == nil && archival != nil && extraction == nil:
 		return archival, bufferedStream, nil
-	case compression != nil && archival != nil:
-		return CompressedArchive{compression, archival}, bufferedStream, nil
+	case compression == nil && archival == nil && extraction != nil:
+		return extraction, bufferedStream, nil
+	case archival != nil || extraction != nil:
+		return Archive{compression, archival, extraction}, bufferedStream, nil
 	default:
-		return nil, bufferedStream, ErrNoMatch
+		return nil, bufferedStream, NoMatch
 	}
 }
 
-func identifyOne(format Format, filename string, stream *rewindReader, comp Compression) (mr MatchResult, err error) {
+func identifyOne(ctx context.Context, format Format, filename string, stream *rewindReader, comp Compression) (mr MatchResult, err error) {
 	defer stream.rewind()
+
+	if filename == "." {
+		filename = ""
+	}
 
 	// if looking within a compressed format, wrap the stream in a
 	// reader that can decompress it so we can match the "inner" format
@@ -107,14 +123,14 @@ func identifyOne(format Format, filename string, stream *rewindReader, comp Comp
 			return MatchResult{}, openErr
 		}
 		defer decompressedStream.Close()
-		mr, err = format.Match(filename, decompressedStream)
+		mr, err = format.Match(ctx, filename, decompressedStream)
 	} else {
 		// Make sure we pass a nil io.Reader not a *rewindReader(nil)
 		var r io.Reader
 		if stream != nil {
 			r = stream
 		}
-		mr, err = format.Match(filename, r)
+		mr, err = format.Match(ctx, filename, r)
 	}
 
 	// if the error is EOF, we can just ignore it.
@@ -150,44 +166,44 @@ func readAtMost(stream io.Reader, n int) ([]byte, error) {
 	return nil, err
 }
 
-// CompressedArchive combines a compression format on top of an archive
-// format (e.g. "tar.gz") and provides both functionalities in a single
-// type. It ensures that archive functions are wrapped by compressors and
+// Archive represents an archive which may be compressed at the outer layer.
+// It combines a compression format on top of an archive/extraction
+// format (e.g. ".tar.gz") and provides both functionalities in a single
+// type. It ensures that archival functions are wrapped by compressors and
 // decompressors. However, compressed archives have some limitations; for
 // example, files cannot be inserted/appended because of complexities with
 // modifying existing compression state (perhaps this could be overcome,
 // but I'm not about to try it).
 //
-// As this type is intended to compose compression and archive formats,
-// both must be specified in order for this value to be valid, or its
-// methods will return errors.
-type CompressedArchive struct {
+// The embedded Archival and Extraction values are used for writing and
+// reading, respectively. Compression is optional and is only needed if the
+// format is compressed externally (for example, tar archives).
+type Archive struct {
 	Compression
 	Archival
+	Extraction
 }
 
-// Name returns a concatenation of the archive format name
-// and the compression format name.
-func (caf CompressedArchive) Name() string {
-	if caf.Compression == nil && caf.Archival == nil {
-		panic("missing both compression and archive formats")
-	}
+// Name returns a concatenation of the archive and compression format extensions.
+func (ar Archive) Extension() string {
 	var name string
-	if caf.Archival != nil {
-		name += caf.Archival.Name()
+	if ar.Archival != nil {
+		name += ar.Archival.Extension()
+	} else if ar.Extraction != nil {
+		name += ar.Extraction.Extension()
 	}
-	if caf.Compression != nil {
-		name += caf.Compression.Name()
+	if ar.Compression != nil {
+		name += ar.Compression.Extension()
 	}
 	return name
 }
 
-// Match matches if the input matches both the compression and archive format.
-func (caf CompressedArchive) Match(filename string, stream io.Reader) (MatchResult, error) {
+// Match matches if the input matches both the compression and archival/extraction format.
+func (ar Archive) Match(ctx context.Context, filename string, stream io.Reader) (MatchResult, error) {
 	var conglomerate MatchResult
 
-	if caf.Compression != nil {
-		matchResult, err := caf.Compression.Match(filename, stream)
+	if ar.Compression != nil {
+		matchResult, err := ar.Compression.Match(ctx, filename, stream)
 		if err != nil {
 			return MatchResult{}, err
 		}
@@ -197,7 +213,7 @@ func (caf CompressedArchive) Match(filename string, stream io.Reader) (MatchResu
 
 		// wrap the reader with the decompressor so we can
 		// attempt to match the archive by reading the stream
-		rc, err := caf.Compression.OpenReader(stream)
+		rc, err := ar.Compression.OpenReader(stream)
 		if err != nil {
 			return matchResult, err
 		}
@@ -207,8 +223,8 @@ func (caf CompressedArchive) Match(filename string, stream io.Reader) (MatchResu
 		conglomerate = matchResult
 	}
 
-	if caf.Archival != nil {
-		matchResult, err := caf.Archival.Match(filename, stream)
+	if ar.Archival != nil {
+		matchResult, err := ar.Archival.Match(ctx, filename, stream)
 		if err != nil {
 			return MatchResult{}, err
 		}
@@ -223,26 +239,32 @@ func (caf CompressedArchive) Match(filename string, stream io.Reader) (MatchResu
 }
 
 // Archive adds files to the output archive while compressing the result.
-func (caf CompressedArchive) Archive(ctx context.Context, output io.Writer, files []File) error {
-	if caf.Compression != nil {
-		wc, err := caf.Compression.OpenWriter(output)
+func (ar Archive) Archive(ctx context.Context, output io.Writer, files []FileInfo) error {
+	if ar.Archival == nil {
+		return fmt.Errorf("no archival format")
+	}
+	if ar.Compression != nil {
+		wc, err := ar.Compression.OpenWriter(output)
 		if err != nil {
 			return err
 		}
 		defer wc.Close()
 		output = wc
 	}
-	return caf.Archival.Archive(ctx, output, files)
+	return ar.Archival.Archive(ctx, output, files)
 }
 
 // ArchiveAsync adds files to the output archive while compressing the result asynchronously.
-func (caf CompressedArchive) ArchiveAsync(ctx context.Context, output io.Writer, jobs <-chan ArchiveAsyncJob) error {
-	do, ok := caf.Archival.(ArchiverAsync)
-	if !ok {
-		return fmt.Errorf("%s archive does not support async writing", caf.Name())
+func (ar Archive) ArchiveAsync(ctx context.Context, output io.Writer, jobs <-chan ArchiveAsyncJob) error {
+	if ar.Archival == nil {
+		return fmt.Errorf("no archival format")
 	}
-	if caf.Compression != nil {
-		wc, err := caf.Compression.OpenWriter(output)
+	do, ok := ar.Archival.(ArchiverAsync)
+	if !ok {
+		return fmt.Errorf("%T archive does not support async writing", ar.Archival)
+	}
+	if ar.Compression != nil {
+		wc, err := ar.Compression.OpenWriter(output)
 		if err != nil {
 			return err
 		}
@@ -253,16 +275,19 @@ func (caf CompressedArchive) ArchiveAsync(ctx context.Context, output io.Writer,
 }
 
 // Extract reads files out of an archive while decompressing the results.
-func (caf CompressedArchive) Extract(ctx context.Context, sourceArchive io.Reader, pathsInArchive []string, handleFile FileHandler) error {
-	if caf.Compression != nil {
-		rc, err := caf.Compression.OpenReader(sourceArchive)
+func (ar Archive) Extract(ctx context.Context, sourceArchive io.Reader, handleFile FileHandler) error {
+	if ar.Extraction == nil {
+		return fmt.Errorf("no extraction format")
+	}
+	if ar.Compression != nil {
+		rc, err := ar.Compression.OpenReader(sourceArchive)
 		if err != nil {
 			return err
 		}
 		defer rc.Close()
 		sourceArchive = rc
 	}
-	return caf.Archival.(Extractor).Extract(ctx, sourceArchive, pathsInArchive, handleFile)
+	return ar.Extraction.Extract(ctx, sourceArchive, handleFile)
 }
 
 // MatchResult returns true if the format was matched either
@@ -285,26 +310,42 @@ func (mr MatchResult) Matched() bool { return mr.ByName || mr.ByStream }
 // read from the stream. This is useful for "peeking" a stream an
 // arbitrary number of bytes. Loosely based on the Connection type
 // from https://github.com/mholt/caddy-l4.
+//
+// If the reader is also an io.Seeker, no buffer is used, and instead
+// the stream seeks back to the starting position.
 type rewindReader struct {
 	io.Reader
+	start     int64
 	buf       *bytes.Buffer
 	bufReader io.Reader
 }
 
-func newRewindReader(r io.Reader) *rewindReader {
+func newRewindReader(r io.Reader) (*rewindReader, error) {
 	if r == nil {
-		return nil
+		return nil, nil
 	}
-	return &rewindReader{
-		Reader: r,
-		buf:    new(bytes.Buffer),
+
+	rr := &rewindReader{Reader: r}
+
+	// avoid buffering if we have a seeker we can use
+	if seeker, ok := r.(io.Seeker); ok {
+		var err error
+		rr.start, err = seeker.Seek(0, io.SeekCurrent)
+		if err != nil {
+			return nil, fmt.Errorf("seek to determine current position: %w", err)
+		}
+	} else {
+		rr.buf = new(bytes.Buffer)
 	}
+
+	return rr, nil
 }
 
 func (rr *rewindReader) Read(p []byte) (n int, err error) {
 	if rr == nil {
-		panic("internal error: reading from nil rewindReader")
+		panic("reading from nil rewindReader")
 	}
+
 	// if there is a buffer we should read from, start
 	// with that; we only read from the underlying stream
 	// after the buffer has been "depleted"
@@ -319,13 +360,13 @@ func (rr *rewindReader) Read(p []byte) (n int, err error) {
 		}
 	}
 
-	// buffer has been "depleted" so read from
-	// underlying connection
+	// buffer has been depleted or we are not using one,
+	// so read from underlying stream
 	nr, err := rr.Reader.Read(p[n:])
 
 	// anything that was read needs to be written to
-	// the buffer, even if there was an error
-	if nr > 0 {
+	// the buffer (if used), even if there was an error
+	if nr > 0 && rr.buf != nil {
 		if nw, errw := rr.buf.Write(p[n : n+nr]); errw != nil {
 			return nw, errw
 		}
@@ -341,18 +382,24 @@ func (rr *rewindReader) Read(p []byte) (n int, err error) {
 
 // rewind resets the stream to the beginning by causing
 // Read() to start reading from the beginning of the
-// buffered bytes.
+// stream, or, if buffering, the buffered bytes.
 func (rr *rewindReader) rewind() {
 	if rr == nil {
 		return
+	}
+	if ras, ok := rr.Reader.(io.Seeker); ok {
+		if _, err := ras.Seek(rr.start, io.SeekStart); err == nil {
+			return
+		}
 	}
 	rr.bufReader = bytes.NewReader(rr.buf.Bytes())
 }
 
 // reader returns a reader that reads first from the buffered
-// bytes, then from the underlying stream. After calling this,
-// no more rewinding is allowed since reads from the stream are
-// not recorded, so rewinding properly is impossible.
+// bytes (if buffering), then from the underlying stream; if a
+// Seeker, the stream will be seeked back to the start. After
+// calling this, no more rewinding is allowed since reads from
+// the stream are not recorded, so rewinding properly is impossible.
 // If the underlying reader implements io.Seeker, then the
 // underlying reader will be used directly.
 func (rr *rewindReader) reader() io.Reader {
@@ -360,23 +407,23 @@ func (rr *rewindReader) reader() io.Reader {
 		return nil
 	}
 	if ras, ok := rr.Reader.(io.Seeker); ok {
-		if _, err := ras.Seek(0, io.SeekStart); err == nil {
+		if _, err := ras.Seek(rr.start, io.SeekStart); err == nil {
 			return rr.Reader
 		}
 	}
 	return io.MultiReader(bytes.NewReader(rr.buf.Bytes()), rr.Reader)
 }
 
-// ErrNoMatch is returned if there are no matching formats.
-var ErrNoMatch = fmt.Errorf("no formats matched")
+// NoMatch is a special error returned if there are no matching formats.
+var NoMatch = fmt.Errorf("no formats matched")
 
 // Registered formats.
 var formats = make(map[string]Format)
 
 // Interface guards
 var (
-	_ Format        = (*CompressedArchive)(nil)
-	_ Archiver      = (*CompressedArchive)(nil)
-	_ ArchiverAsync = (*CompressedArchive)(nil)
-	_ Extractor     = (*CompressedArchive)(nil)
+	_ Format        = (*Archive)(nil)
+	_ Archiver      = (*Archive)(nil)
+	_ ArchiverAsync = (*Archive)(nil)
+	_ Extractor     = (*Archive)(nil)
 )

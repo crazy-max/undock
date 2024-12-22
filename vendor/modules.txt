@@ -41,6 +41,9 @@ github.com/Microsoft/hcsshim/internal/vmcompute
 github.com/Microsoft/hcsshim/internal/wclayer
 github.com/Microsoft/hcsshim/internal/winapi
 github.com/Microsoft/hcsshim/osversion
+# github.com/STARRY-S/zip v0.1.0
+## explicit; go 1.21.3
+github.com/STARRY-S/zip
 # github.com/VividCortex/ewma v1.2.0
 ## explicit; go 1.12
 github.com/VividCortex/ewma
@@ -50,20 +53,22 @@ github.com/acarl005/stripansi
 # github.com/alecthomas/kong v1.6.0
 ## explicit; go 1.20
 github.com/alecthomas/kong
-# github.com/andybalholm/brotli v1.0.4
-## explicit; go 1.12
+# github.com/andybalholm/brotli v1.1.1
+## explicit; go 1.13
 github.com/andybalholm/brotli
+github.com/andybalholm/brotli/matchfinder
 # github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
 ## explicit; go 1.13
 github.com/asaskevich/govalidator
-# github.com/bodgit/plumbing v1.2.0
+# github.com/bodgit/plumbing v1.3.0
 ## explicit; go 1.13
 github.com/bodgit/plumbing
-# github.com/bodgit/sevenzip v1.3.0
-## explicit; go 1.17
+# github.com/bodgit/sevenzip v1.5.2
+## explicit; go 1.19
 github.com/bodgit/sevenzip
 github.com/bodgit/sevenzip/internal/aes7z
 github.com/bodgit/sevenzip/internal/bcj2
+github.com/bodgit/sevenzip/internal/bra
 github.com/bodgit/sevenzip/internal/brotli
 github.com/bodgit/sevenzip/internal/bzip2
 github.com/bodgit/sevenzip/internal/deflate
@@ -74,12 +79,9 @@ github.com/bodgit/sevenzip/internal/lzma2
 github.com/bodgit/sevenzip/internal/pool
 github.com/bodgit/sevenzip/internal/util
 github.com/bodgit/sevenzip/internal/zstd
-# github.com/bodgit/windows v1.0.0
+# github.com/bodgit/windows v1.0.1
 ## explicit; go 1.13
 github.com/bodgit/windows
-# github.com/connesc/cipherio v0.2.1
-## explicit; go 1.14
-github.com/connesc/cipherio
 # github.com/containerd/cgroups/v3 v3.0.3
 ## explicit; go 1.18
 github.com/containerd/cgroups/v3/cgroup1/stats
@@ -287,7 +289,7 @@ github.com/docker/go-connections/tlsconfig
 # github.com/docker/go-units v0.5.0
 ## explicit
 github.com/docker/go-units
-# github.com/dsnet/compress v0.0.2-0.20210315054119-f66993602bf5
+# github.com/dsnet/compress v0.0.2-0.20230904184137-39efe44ab707
 ## explicit; go 1.9
 github.com/dsnet/compress
 github.com/dsnet/compress/bzip2
@@ -379,6 +381,11 @@ github.com/hashicorp/errwrap
 # github.com/hashicorp/go-multierror v1.1.1
 ## explicit; go 1.13
 github.com/hashicorp/go-multierror
+# github.com/hashicorp/golang-lru/v2 v2.0.7
+## explicit; go 1.18
+github.com/hashicorp/golang-lru/v2
+github.com/hashicorp/golang-lru/v2/internal
+github.com/hashicorp/golang-lru/v2/simplelru
 # github.com/josharian/intern v1.0.0
 ## explicit; go 1.5
 github.com/josharian/intern
@@ -427,8 +434,8 @@ github.com/mattn/go-runewidth
 # github.com/mattn/go-sqlite3 v1.14.24
 ## explicit; go 1.19
 github.com/mattn/go-sqlite3
-# github.com/mholt/archiver/v4 v4.0.0-alpha.8
-## explicit; go 1.18
+# github.com/mholt/archiver/v4 v4.0.0-alpha.9
+## explicit; go 1.22.2
 github.com/mholt/archiver/v4
 # github.com/miekg/pkcs11 v1.1.1
 ## explicit; go 1.12
@@ -457,7 +464,7 @@ github.com/modern-go/concurrent
 # github.com/modern-go/reflect2 v1.0.2
 ## explicit; go 1.12
 github.com/modern-go/reflect2
-# github.com/nwaples/rardecode/v2 v2.0.0-beta.2
+# github.com/nwaples/rardecode/v2 v2.0.0-beta.4
 ## explicit; go 1.16
 github.com/nwaples/rardecode/v2
 # github.com/oklog/ulid v1.3.1
@@ -482,7 +489,7 @@ github.com/opencontainers/selinux/pkg/pwalkdir
 ## explicit
 github.com/ostreedev/ostree-go/pkg/glibobject
 github.com/ostreedev/ostree-go/pkg/otbuiltin
-# github.com/pierrec/lz4/v4 v4.1.15
+# github.com/pierrec/lz4/v4 v4.1.21
 ## explicit; go 1.14
 github.com/pierrec/lz4/v4
 github.com/pierrec/lz4/v4/internal/lz4block
@@ -526,6 +533,9 @@ github.com/sigstore/sigstore/pkg/signature/payload
 # github.com/sirupsen/logrus v1.9.3
 ## explicit; go 1.13
 github.com/sirupsen/logrus
+# github.com/sorairolake/lzip-go v0.3.5
+## explicit; go 1.22
+github.com/sorairolake/lzip-go
 # github.com/stefanberger/go-pkcs11uri v0.0.0-20230803200340-78284954bff6
 ## explicit; go 1.19
 github.com/stefanberger/go-pkcs11uri
@@ -608,9 +618,10 @@ go.opentelemetry.io/otel/metric/embedded
 ## explicit; go 1.21
 go.opentelemetry.io/otel/trace
 go.opentelemetry.io/otel/trace/embedded
-# go4.org v0.0.0-20200411211856-f5505b9728dd
+# go4.org v0.0.0-20230225012048-214862532bf5
 ## explicit; go 1.13
 go4.org/readerutil
+go4.org/syncutil
 # golang.org/x/crypto v0.28.0
 ## explicit; go 1.20
 golang.org/x/crypto/cast5

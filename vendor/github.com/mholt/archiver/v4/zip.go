@@ -11,6 +11,8 @@ import (
 	"path"
 	"strings"
 
+	szip "github.com/STARRY-S/zip"
+
 	"github.com/dsnet/compress/bzip2"
 	"github.com/klauspost/compress/zip"
 	"github.com/klauspost/compress/zstd"
@@ -81,13 +83,13 @@ type Zip struct {
 	TextEncoding string
 }
 
-func (z Zip) Name() string { return ".zip" }
+func (z Zip) Extension() string { return ".zip" }
 
-func (z Zip) Match(filename string, stream io.Reader) (MatchResult, error) {
+func (z Zip) Match(_ context.Context, filename string, stream io.Reader) (MatchResult, error) {
 	var mr MatchResult
 
 	// match filename
-	if strings.Contains(strings.ToLower(filename), z.Name()) {
+	if strings.Contains(strings.ToLower(filename), z.Extension()) {
 		mr.ByName = true
 	}
 
@@ -101,7 +103,7 @@ func (z Zip) Match(filename string, stream io.Reader) (MatchResult, error) {
 	return mr, nil
 }
 
-func (z Zip) Archive(ctx context.Context, output io.Writer, files []File) error {
+func (z Zip) Archive(ctx context.Context, output io.Writer, files []FileInfo) error {
 	zw := zip.NewWriter(output)
 	defer zw.Close()
 
@@ -127,7 +129,7 @@ func (z Zip) ArchiveAsync(ctx context.Context, output io.Writer, jobs <-chan Arc
 	return nil
 }
 
-func (z Zip) archiveOneFile(ctx context.Context, zw *zip.Writer, idx int, file File) error {
+func (z Zip) archiveOneFile(ctx context.Context, zw *zip.Writer, idx int, file FileInfo) error {
 	if err := ctx.Err(); err != nil {
 		return err // honor context cancellation
 	}
@@ -137,6 +139,9 @@ func (z Zip) archiveOneFile(ctx context.Context, zw *zip.Writer, idx int, file F
 		return fmt.Errorf("getting info for file %d: %s: %w", idx, file.Name(), err)
 	}
 	hdr.Name = file.NameInArchive // complete path, since FileInfoHeader() only has base name
+	if hdr.Name == "" {
+		hdr.Name = file.Name() // assume base name of file I guess
+	}
 
 	// customize header based on file properties
 	if file.IsDir() {
@@ -152,6 +157,8 @@ func (z Zip) archiveOneFile(ctx context.Context, zw *zip.Writer, idx int, file F
 		} else {
 			hdr.Method = z.Compression
 		}
+	} else {
+		hdr.Method = z.Compression
 	}
 
 	w, err := zw.CreateHeader(hdr)
@@ -176,7 +183,7 @@ func (z Zip) archiveOneFile(ctx context.Context, zw *zip.Writer, idx int, file F
 // the interface because we figure you can Read() from anything you can ReadAt() or Seek()
 // with. Due to the nature of the zip archive format, if sourceArchive is not an io.Seeker
 // and io.ReaderAt, an error is returned.
-func (z Zip) Extract(ctx context.Context, sourceArchive io.Reader, pathsInArchive []string, handleFile FileHandler) error {
+func (z Zip) Extract(ctx context.Context, sourceArchive io.Reader, handleFile FileHandler) error {
 	sra, ok := sourceArchive.(seekReaderAt)
 	if !ok {
 		return fmt.Errorf("input type must be an io.ReaderAt and io.Seeker because of zip format constraints")
@@ -204,22 +211,28 @@ func (z Zip) Extract(ctx context.Context, sourceArchive io.Reader, pathsInArchiv
 		// ensure filename and comment are UTF-8 encoded (issue #147 and PR #305)
 		z.decodeText(&f.FileHeader)
 
-		if !fileIsIncluded(pathsInArchive, f.Name) {
-			continue
-		}
 		if fileIsIncluded(skipDirs, f.Name) {
 			continue
 		}
 
-		file := File{
-			FileInfo:      f.FileInfo(),
+		info := f.FileInfo()
+		file := FileInfo{
+			FileInfo:      info,
 			Header:        f.FileHeader,
 			NameInArchive: f.Name,
-			Open:          func() (io.ReadCloser, error) { return f.Open() },
+			Open: func() (fs.File, error) {
+				openedFile, err := f.Open()
+				if err != nil {
+					return nil, err
+				}
+				return fileInArchive{openedFile, info}, nil
+			},
 		}
 
 		err := handleFile(ctx, file)
-		if errors.Is(err, fs.SkipDir) {
+		if errors.Is(err, fs.SkipAll) {
+			break
+		} else if errors.Is(err, fs.SkipDir) {
 			// if a directory, skip this path; if a file, skip the folder path
 			dirPath := f.Name
 			if !file.IsDir() {
@@ -256,25 +269,69 @@ func (z Zip) decodeText(hdr *zip.FileHeader) {
 	}
 }
 
+// Insert appends the listed files into the provided Zip archive stream.
+func (z Zip) Insert(ctx context.Context, into io.ReadWriteSeeker, files []FileInfo) error {
+	// following very simple example at https://github.com/STARRY-S/zip?tab=readme-ov-file#usage
+	zu, err := szip.NewUpdater(into)
+	if err != nil {
+		return err
+	}
+	defer zu.Close()
+
+	for idx, file := range files {
+		if err := ctx.Err(); err != nil {
+			return err // honor context cancellation
+		}
+
+		hdr, err := szip.FileInfoHeader(file)
+		if err != nil {
+			return fmt.Errorf("getting info for file %d: %s: %w", idx, file.NameInArchive, err)
+		}
+		hdr.Name = file.NameInArchive // complete path, since FileInfoHeader() only has base name
+		if hdr.Name == "" {
+			hdr.Name = file.Name() // assume base name of file I guess
+		}
+
+		// customize header based on file properties
+		if file.IsDir() {
+			if !strings.HasSuffix(hdr.Name, "/") {
+				hdr.Name += "/" // required
+			}
+			hdr.Method = zip.Store
+		} else if z.SelectiveCompression {
+			// only enable compression on compressable files
+			ext := strings.ToLower(path.Ext(hdr.Name))
+			if _, ok := compressedFormats[ext]; ok {
+				hdr.Method = zip.Store
+			} else {
+				hdr.Method = z.Compression
+			}
+		}
+
+		w, err := zu.AppendHeaderAt(hdr, -1)
+		if err != nil {
+			return fmt.Errorf("inserting file header: %d: %s: %w", idx, file.Name(), err)
+		}
+
+		// directories have no file body
+		if file.IsDir() {
+			return nil
+		}
+		if err := openAndCopyFile(file, w); err != nil {
+			if z.ContinueOnError && ctx.Err() == nil {
+				log.Printf("[ERROR] appending file %d into archive: %s: %v", idx, file.Name(), err)
+				continue
+			}
+			return fmt.Errorf("copying inserted file %d: %s: %w", idx, file.Name(), err)
+		}
+	}
+
+	return nil
+}
+
 type seekReaderAt interface {
 	io.ReaderAt
 	io.Seeker
-}
-
-func streamSizeBySeeking(s io.Seeker) (int64, error) {
-	currentPosition, err := s.Seek(0, io.SeekCurrent)
-	if err != nil {
-		return 0, fmt.Errorf("getting current offset: %w", err)
-	}
-	maxPosition, err := s.Seek(0, io.SeekEnd)
-	if err != nil {
-		return 0, fmt.Errorf("fast-forwarding to end: %w", err)
-	}
-	_, err = s.Seek(currentPosition, io.SeekStart)
-	if err != nil {
-		return 0, fmt.Errorf("returning to prior offset %d: %w", currentPosition, err)
-	}
-	return maxPosition, nil
 }
 
 // Additional compression methods not offered by archive/zip.

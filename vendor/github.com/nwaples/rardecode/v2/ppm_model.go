@@ -31,7 +31,7 @@ const (
 )
 
 var (
-	errCorruptPPM = errors.New("rardecode: corrupt ppm data")
+	ErrCorruptPPM = errors.New("rardecode: corrupt ppm data")
 
 	expEscape  = []byte{25, 14, 9, 7, 5, 5, 4, 4, 4, 3, 3, 3, 2, 2, 2, 2}
 	initBinEsc = []uint16{0x3CDD, 0x1F3F, 0x59BF, 0x48F3, 0x64A1, 0x5ABC, 0x6632, 0x6051}
@@ -616,7 +616,7 @@ func (m *model) init(br io.ByteReader, reset bool, maxOrder, maxMB int) error {
 	m.a.init(maxMB)
 
 	if maxOrder == 1 {
-		return errCorruptPPM
+		return ErrCorruptPPM
 	}
 	m.maxOrder = maxOrder
 	m.prevSym = 0
@@ -718,7 +718,7 @@ func (m *model) decodeSymbol1(c context) (*state, error) {
 	// protect against divide by zero
 	// TODO: look at why this happens, may be problem elsewhere
 	if scale == 0 {
-		return nil, errCorruptPPM
+		return nil, ErrCorruptPPM
 	}
 	count := m.rc.currentCount(scale)
 	m.prevSuccess = 0
@@ -799,7 +799,7 @@ func (m *model) decodeSymbol2(c context, numMasked int) (*state, error) {
 	count := m.rc.currentCount(scale)
 
 	if count >= scale {
-		return nil, errCorruptPPM
+		return nil, ErrCorruptPPM
 	}
 	if count >= hi {
 		err := m.rc.decode(hi, scale)
@@ -1044,7 +1044,7 @@ func (m *model) ReadByte() (byte, error) {
 			m.orderFall++
 			minC = m.a.contextSuffix(minC)
 			if minC <= 0 {
-				return 0, errCorruptPPM
+				return 0, ErrCorruptPPM
 			}
 		}
 		s, err = m.decodeSymbol2(minC, n)

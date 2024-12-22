@@ -13,11 +13,11 @@ const (
 )
 
 var (
-	errCorruptHeader     = errors.New("rardecode: corrupt block header")
-	errCorruptFileHeader = errors.New("rardecode: corrupt file header")
-	errBadHeaderCrc      = errors.New("rardecode: bad header crc")
-	errUnknownDecoder    = errors.New("rardecode: unknown decoder version")
-	errDecoderOutOfData  = errors.New("rardecode: decoder expected more data than is in packed file")
+	ErrCorruptBlockHeader = errors.New("rardecode: corrupt block header")
+	ErrCorruptFileHeader  = errors.New("rardecode: corrupt file header")
+	ErrBadHeaderCRC       = errors.New("rardecode: bad header crc")
+	ErrUnknownDecoder     = errors.New("rardecode: unknown decoder version")
+	ErrDecoderOutOfData   = errors.New("rardecode: decoder expected more data than is in packed file")
 )
 
 type readBuf []byte
@@ -111,6 +111,6 @@ func newFileBlockReader(v *volume) (fileBlockReader, error) {
 	case 1:
 		return newArchive50(pass), nil
 	default:
-		return nil, errUnknownArc
+		return nil, ErrUnknownVersion
 	}
 }

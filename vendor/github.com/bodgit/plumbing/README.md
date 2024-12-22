@@ -2,8 +2,8 @@
 [![Coverage Status](https://coveralls.io/repos/github/bodgit/plumbing/badge.svg?branch=master)](https://coveralls.io/github/bodgit/plumbing?branch=master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/bodgit/plumbing)](https://goreportcard.com/report/github.com/bodgit/plumbing)
 [![GoDoc](https://godoc.org/github.com/bodgit/plumbing?status.svg)](https://godoc.org/github.com/bodgit/plumbing)
+![Go version](https://img.shields.io/badge/Go-1.19-brightgreen.svg)
 ![Go version](https://img.shields.io/badge/Go-1.18-brightgreen.svg)
-![Go version](https://img.shields.io/badge/Go-1.17-brightgreen.svg)
 
 plumbing
 ========

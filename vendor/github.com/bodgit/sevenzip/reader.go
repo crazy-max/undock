@@ -30,9 +30,6 @@ var (
 	errTooMuch  = errors.New("sevenzip: too much data")
 )
 
-//nolint:gochecknoglobals
-var newPool pool.Constructor = pool.NewPool
-
 // A Reader serves content from a 7-Zip archive.
 type Reader struct {
 	r     io.ReaderAt
@@ -142,7 +139,7 @@ func (f *File) Open() (io.ReadCloser, error) {
 	return &fileReader{
 		rc: rc,
 		f:  f,
-		n:  int64(f.UncompressedSize),
+		n:  int64(f.UncompressedSize), //nolint:gosec
 	}, nil
 }
 
@@ -254,41 +251,96 @@ func NewReader(r io.ReaderAt, size int64) (*Reader, error) {
 
 func (z *Reader) folderReader(si *streamsInfo, f int) (*folderReadCloser, uint32, error) {
 	// Create a SectionReader covering all of the streams data
-	return si.FolderReader(io.NewSectionReader(z.r, z.start, z.end), f, z.p)
+	return si.FolderReader(io.NewSectionReader(z.r, z.start, z.end-z.start), f, z.p)
 }
 
-//nolint:cyclop,funlen,gocognit
+const (
+	chunkSize   = 4096
+	searchLimit = 1 << 20 // 1 MiB
+)
+
+func findSignature(r io.ReaderAt, search []byte) ([]int64, error) {
+	chunk := make([]byte, chunkSize+len(search))
+	offsets := make([]int64, 0, 2)
+
+	for offset := int64(0); offset < searchLimit; offset += chunkSize {
+		n, err := r.ReadAt(chunk, offset)
+
+		for i := 0; ; {
+			idx := bytes.Index(chunk[i:n], search)
+			if idx == -1 {
+				break
+			}
+
+			offsets = append(offsets, offset+int64(i+idx))
+			if offsets[0] == 0 {
+				// If signature is at the beginning, return immediately, it's a regular archive
+				return offsets, nil
+			}
+
+			i += idx + 1
+		}
+
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+
+			return nil, err
+		}
+	}
+
+	return offsets, nil
+}
+
+//nolint:cyclop,funlen,gocognit,gocyclo
 func (z *Reader) init(r io.ReaderAt, size int64) error {
 	h := crc32.NewIEEE()
 	tra := plumbing.TeeReaderAt(r, h)
-	sr := io.NewSectionReader(tra, 0, size) // Will only read first 32 bytes
 
-	var sh signatureHeader
-	if err := binary.Read(sr, binary.LittleEndian, &sh); err != nil {
+	signature := []byte{'7', 'z', 0xbc, 0xaf, 0x27, 0x1c}
+
+	offsets, err := findSignature(r, signature)
+	if err != nil {
 		return err
 	}
 
-	signature := []byte{'7', 'z', 0xbc, 0xaf, 0x27, 0x1c}
-	if !bytes.Equal(sh.Signature[:], signature) {
+	if len(offsets) == 0 {
 		return errFormat
 	}
 
-	z.r = r
-
-	h.Reset()
-
 	var (
-		err   error
+		sr    *io.SectionReader
+		off   int64
 		start startHeader
 	)
 
-	if err = binary.Read(sr, binary.LittleEndian, &start); err != nil {
-		return err
+	for _, off = range offsets {
+		sr = io.NewSectionReader(tra, off, size-off) // Will only read first 32 bytes
+
+		var sh signatureHeader
+		if err = binary.Read(sr, binary.LittleEndian, &sh); err != nil {
+			return err
+		}
+
+		z.r = r
+
+		h.Reset()
+
+		if err = binary.Read(sr, binary.LittleEndian, &start); err != nil {
+			return err
+		}
+
+		// CRC of the start header should match
+		if util.CRC32Equal(h.Sum(nil), sh.CRC) {
+			break
+		}
+
+		err = errChecksum
 	}
 
-	// CRC of the start header should match
-	if !util.CRC32Equal(h.Sum(nil), sh.CRC) {
-		return errChecksum
+	if err != nil {
+		return err
 	}
 
 	// Work out where we are in the file (32, avoiding magic numbers)
@@ -297,14 +349,17 @@ func (z *Reader) init(r io.ReaderAt, size int64) error {
 	}
 
 	// Seek over the streams
-	if z.end, err = sr.Seek(int64(start.Offset), io.SeekCurrent); err != nil {
+	if z.end, err = sr.Seek(int64(start.Offset), io.SeekCurrent); err != nil { //nolint:gosec
 		return err
 	}
+
+	z.start += off
+	z.end += off
 
 	h.Reset()
 
 	// Bound bufio.Reader otherwise it can read trailing garbage which screws up the CRC check
-	br := bufio.NewReader(io.NewSectionReader(tra, z.end, int64(start.Size)))
+	br := bufio.NewReader(io.NewSectionReader(tra, z.end, int64(start.Size))) //nolint:gosec
 
 	id, err := br.ReadByte()
 	if err != nil {
@@ -364,45 +419,71 @@ func (z *Reader) init(r io.ReaderAt, size int64) error {
 
 	z.si = header.streamsInfo
 
+	// spew.Dump(header)
+	filesPerStream := make(map[int]int, z.si.Folders())
+
+	if header.filesInfo != nil {
+		folder, offset := 0, int64(0)
+		z.File = make([]*File, 0, len(header.filesInfo.file))
+		j := 0
+
+		for _, fh := range header.filesInfo.file {
+			f := new(File)
+			f.zip = z
+			f.FileHeader = fh
+
+			if f.FileHeader.FileInfo().IsDir() && !strings.HasSuffix(f.FileHeader.Name, "/") {
+				f.FileHeader.Name += "/"
+			}
+
+			if !fh.isEmptyStream && !fh.isEmptyFile {
+				f.folder, _ = header.streamsInfo.FileFolderAndSize(j)
+
+				// Make an exported copy of the folder index
+				f.Stream = f.folder
+
+				filesPerStream[f.folder]++
+
+				if f.folder != folder {
+					offset = 0
+				}
+
+				f.offset = offset
+				offset += int64(f.UncompressedSize) //nolint:gosec
+				folder = f.folder
+				j++
+			}
+
+			z.File = append(z.File, f)
+		}
+	}
+
+	// spew.Dump(filesPerStream)
+
 	z.pool = make([]pool.Pooler, z.si.Folders())
 	for i := range z.pool {
+		var newPool pool.Constructor = pool.NewNoopPool
+
+		if filesPerStream[i] > 1 {
+			newPool = pool.NewPool
+		}
+
 		if z.pool[i], err = newPool(); err != nil {
 			return err
 		}
 	}
 
-	// spew.Dump(header)
+	return nil
+}
 
-	folder, offset := 0, int64(0)
-	z.File = make([]*File, 0, len(header.filesInfo.file))
-	j := 0
-
-	for _, fh := range header.filesInfo.file {
-		f := new(File)
-		f.zip = z
-		f.FileHeader = fh
-
-		if f.FileHeader.FileInfo().IsDir() && !strings.HasSuffix(f.FileHeader.Name, "/") {
-			f.FileHeader.Name += "/"
-		}
-
-		if !fh.isEmptyStream && !fh.isEmptyFile {
-			f.folder, _ = header.streamsInfo.FileFolderAndSize(j)
-
-			if f.folder != folder {
-				offset = 0
-			}
-
-			f.offset = offset
-			offset += int64(f.UncompressedSize)
-			folder = f.folder
-			j++
-		}
-
-		z.File = append(z.File, f)
+// Volumes returns the list of volumes that have been opened as part of the current archive.
+func (rc *ReadCloser) Volumes() []string {
+	volumes := make([]string, len(rc.f))
+	for idx, f := range rc.f {
+		volumes[idx] = f.Name()
 	}
 
-	return nil
+	return volumes
 }
 
 // Close closes the 7-zip file or volumes, rendering them unusable for I/O.
@@ -473,7 +554,7 @@ func toValidName(name string) string {
 	return p
 }
 
-//nolint:cyclop,gocognit
+//nolint:cyclop,funlen
 func (z *Reader) initFileList() {
 	z.fileListOnce.Do(func() {
 		files := make(map[string]int)
@@ -512,12 +593,14 @@ func (z *Reader) initFileList() {
 				isDir: isDir,
 			}
 			z.fileList = append(z.fileList, entry)
+
 			if isDir {
 				knownDirs[name] = idx
 			} else {
 				files[name] = idx
 			}
 		}
+
 		for dir := range dirs {
 			if _, ok := knownDirs[dir]; !ok {
 				if idx, ok := files[dir]; ok {
