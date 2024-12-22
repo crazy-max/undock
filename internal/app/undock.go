@@ -9,7 +9,7 @@ import (
 	"github.com/crazy-max/undock/internal/config"
 	ximage "github.com/crazy-max/undock/pkg/extractor/image"
 	"github.com/crazy-max/undock/pkg/image"
-	specs "github.com/opencontainers/image-spec/specs-go/v1"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
 
@@ -18,7 +18,7 @@ type Undock struct {
 	ctx      context.Context
 	meta     config.Meta
 	cli      config.Cli
-	platform specs.Platform
+	platform ocispecs.Platform
 }
 
 // New creates new undock instance
