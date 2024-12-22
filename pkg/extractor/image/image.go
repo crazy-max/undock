@@ -11,7 +11,7 @@ import (
 	"github.com/containerd/containerd/platforms"
 	"github.com/containers/image/v5/manifest"
 	"github.com/crazy-max/undock/pkg/extractor"
-	specs "github.com/opencontainers/image-spec/specs-go/v1"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -31,7 +31,7 @@ type Options struct {
 	// Source image reference
 	Source string
 	// Platform to enforce for Source image
-	Platform specs.Platform
+	Platform ocispecs.Platform
 	// Includes a subset of files/dirs from the Source image
 	Includes []string
 	// All extracts all architectures if Source image is a manifest list
@@ -102,14 +102,14 @@ func (c *Client) Extract() error {
 	}
 
 	type manifestEntry struct {
-		platform specs.Platform
+		platform ocispecs.Platform
 		manifest *manifest.OCI1
 	}
 
 	var mans []manifestEntry
 
 	mtype := manifest.GuessMIMEType(manblob)
-	if mtype == specs.MediaTypeImageManifest {
+	if mtype == ocispecs.MediaTypeImageManifest {
 		man, err := manifest.OCI1FromManifest(manblob)
 		if err != nil {
 			return errors.Wrap(err, "cannot create OCI manifest instance from blob")
@@ -118,7 +118,7 @@ func (c *Client) Extract() error {
 			platform: c.opts.Platform,
 			manifest: man,
 		})
-	} else if mtype == specs.MediaTypeImageIndex {
+	} else if mtype == ocispecs.MediaTypeImageIndex {
 		ocindex, err := manifest.OCI1IndexFromManifest(manblob)
 		if err != nil {
 			return errors.Wrap(err, "cannot create OCI manifest index instance from blob")

@@ -2,7 +2,6 @@ package extractor
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -93,7 +92,7 @@ func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 		case f.FileInfo.Mode()&fs.ModeSymlink != 0:
 			return writeSymlink(ctx, path, f)
 		default:
-			return fmt.Errorf("cannot handle file mode: %v", f.FileInfo.Mode())
+			return errors.Errorf("cannot handle file mode: %v", f.FileInfo.Mode())
 		}
 	})
 }
