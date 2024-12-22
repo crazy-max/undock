@@ -8,6 +8,7 @@ import (
 	"hash"
 	"hash/crc32"
 	"io"
+	"math/bits"
 	"time"
 )
 
@@ -45,6 +46,13 @@ const (
 	file5EncCheckPresent = 0x0001 // password check data is present
 	file5EncUseMac       = 0x0002 // use MAC instead of plain checksum
 
+	// precision time flags
+	file5ExtraTimeIsUnixTime = 0x01 // is unix time_t
+	file5ExtraTimeHasMTime   = 0x02 // has modification time
+	file5ExtraTimeHasCTime   = 0x04 // has creation time
+	file5ExtraTimeHasATime   = 0x08 // has access time
+	file5ExtraTimeHasUnixNS  = 0x10 // unix nanosecond time format
+
 	cacheSize50   = 4
 	maxPbkdf2Salt = 64
 	pwCheckSize   = 8
@@ -52,9 +60,9 @@ const (
 )
 
 var (
-	errBadPassword      = errors.New("rardecode: incorrect password")
-	errCorruptEncrypt   = errors.New("rardecode: corrupt encryption data")
-	errUnknownEncMethod = errors.New("rardecode: unknown encryption method")
+	ErrBadPassword          = errors.New("rardecode: incorrect password")
+	ErrCorruptEncryptData   = errors.New("rardecode: corrupt encryption data")
+	ErrUnknownEncryptMethod = errors.New("rardecode: unknown encryption method")
 )
 
 type extra struct {
@@ -159,7 +167,7 @@ func (a *archive50) getKeys(kdfCount int, salt, check []byte) ([][]byte, error) 
 	var keys [][]byte
 
 	if kdfCount > maxKdfCount {
-		return nil, errCorruptEncrypt
+		return nil, ErrCorruptEncryptData
 	}
 	kdfCount = 1 << uint(kdfCount)
 
@@ -183,7 +191,7 @@ func (a *archive50) getKeys(kdfCount int, salt, check []byte) ([][]byte, error) 
 
 	// check password
 	if check != nil && !bytes.Equal(check, keys[2]) {
-		return nil, errBadPassword
+		return nil, ErrBadPassword
 	}
 	return keys, nil
 }
@@ -191,11 +199,11 @@ func (a *archive50) getKeys(kdfCount int, salt, check []byte) ([][]byte, error) 
 // parseFileEncryptionRecord processes the optional file encryption record from a file header.
 func (a *archive50) parseFileEncryptionRecord(b readBuf, f *fileBlockHeader) error {
 	if ver := b.uvarint(); ver != 0 {
-		return errUnknownEncMethod
+		return ErrUnknownEncryptMethod
 	}
 	flags := b.uvarint()
 	if len(b) < 33 {
-		return errCorruptEncrypt
+		return ErrCorruptEncryptData
 	}
 	kdfCount := int(b.byte())
 	salt := b.bytes(16)
@@ -204,7 +212,7 @@ func (a *archive50) parseFileEncryptionRecord(b readBuf, f *fileBlockHeader) err
 	var check []byte
 	if flags&file5EncCheckPresent > 0 {
 		if len(b) < 12 {
-			return errCorruptEncrypt
+			return ErrCorruptEncryptData
 		}
 		check = b.bytes(12)
 	}
@@ -217,6 +225,96 @@ func (a *archive50) parseFileEncryptionRecord(b readBuf, f *fileBlockHeader) err
 	f.key = keys[0]
 	if flags&file5EncUseMac > 0 {
 		f.hashKey = keys[1]
+	}
+	return nil
+}
+
+func readWinFiletime(b *readBuf) (time.Time, error) {
+	if len(*b) < 8 {
+		return time.Time{}, ErrCorruptFileHeader
+	}
+	// 100-nanosecond intervals since January 1, 1601
+	t := b.uint64() - 116444736000000000
+	t *= 100
+	sec, nsec := bits.Div64(0, t, uint64(time.Second))
+	return time.Unix(int64(sec), int64(nsec)), nil
+}
+
+func readUnixTime(b *readBuf) (time.Time, error) {
+	if len(*b) < 4 {
+		return time.Time{}, ErrCorruptFileHeader
+	}
+	return time.Unix(int64(b.uint32()), 0), nil
+}
+
+func readUnixNanoseconds(b *readBuf) (time.Duration, error) {
+	if len(*b) < 4 {
+		return 0, ErrCorruptFileHeader
+	}
+	d := time.Duration(b.uint32() & 0x3fffffff)
+	if d >= time.Second {
+		return 0, ErrCorruptFileHeader
+	}
+	return d, nil
+}
+
+// parseFilePrecisionTimeRecord processes the optional high precision time record from a file header.
+func (a *archive50) parseFilePrecisionTimeRecord(b *readBuf, f *fileBlockHeader) error {
+	var err error
+	flags := b.uvarint()
+	isUnixTime := flags&file5ExtraTimeIsUnixTime > 0
+	if flags&file5ExtraTimeHasMTime > 0 {
+		if isUnixTime {
+			f.ModificationTime, err = readUnixTime(b)
+		} else {
+			f.ModificationTime, err = readWinFiletime(b)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if flags&file5ExtraTimeHasCTime > 0 {
+		if isUnixTime {
+			f.CreationTime, err = readUnixTime(b)
+		} else {
+			f.CreationTime, err = readWinFiletime(b)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if flags&file5ExtraTimeHasATime > 0 {
+		if isUnixTime {
+			f.AccessTime, err = readUnixTime(b)
+		} else {
+			f.AccessTime, err = readWinFiletime(b)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if isUnixTime && flags&file5ExtraTimeHasUnixNS > 0 {
+		if flags&file5ExtraTimeHasMTime > 0 {
+			ns, err := readUnixNanoseconds(b)
+			if err != nil {
+				return err
+			}
+			f.ModificationTime = f.ModificationTime.Add(ns)
+		}
+		if flags&file5ExtraTimeHasCTime > 0 {
+			ns, err := readUnixNanoseconds(b)
+			if err != nil {
+				return err
+			}
+			f.CreationTime = f.CreationTime.Add(ns)
+		}
+		if flags&file5ExtraTimeHasATime > 0 {
+			ns, err := readUnixNanoseconds(b)
+			if err != nil {
+				return err
+			}
+			f.AccessTime = f.AccessTime.Add(ns)
+		}
 	}
 	return nil
 }
@@ -235,13 +333,13 @@ func (a *archive50) parseFileHeader(h *blockHeader50) (*fileBlockHeader, error) 
 	f.Attributes = int64(h.data.uvarint())
 	if flags&file5HasUnixMtime > 0 {
 		if len(h.data) < 4 {
-			return nil, errCorruptFileHeader
+			return nil, ErrCorruptFileHeader
 		}
 		f.ModificationTime = time.Unix(int64(h.data.uint32()), 0)
 	}
 	if flags&file5HasCRC32 > 0 {
 		if len(h.data) < 4 {
-			return nil, errCorruptFileHeader
+			return nil, ErrCorruptFileHeader
 		}
 		f.sum = append([]byte(nil), h.data.bytes(4)...)
 		if f.first {
@@ -257,7 +355,7 @@ func (a *archive50) parseFileHeader(h *blockHeader50) (*fileBlockHeader, error) 
 	if f.first && method != 0 {
 		unpackver := flags & 0x003f
 		if unpackver != 0 {
-			return nil, errUnknownDecoder
+			return nil, ErrUnknownDecoder
 		}
 		f.decVer = decode50Ver
 	}
@@ -271,7 +369,7 @@ func (a *archive50) parseFileHeader(h *blockHeader50) (*fileBlockHeader, error) 
 	}
 	nlen := int(h.data.uvarint())
 	if len(h.data) < nlen {
-		return nil, errCorruptFileHeader
+		return nil, ErrCorruptFileHeader
 	}
 	f.Name = string(h.data.bytes(nlen))
 
@@ -284,7 +382,7 @@ func (a *archive50) parseFileHeader(h *blockHeader50) (*fileBlockHeader, error) 
 		case 2:
 			// TODO: hash
 		case 3:
-			// TODO: time
+			err = a.parseFilePrecisionTimeRecord(&e.data, f)
 		case 4: // version
 			_ = e.data.uvarint() // ignore flags field
 			f.Version = int(e.data.uvarint())
@@ -303,11 +401,11 @@ func (a *archive50) parseFileHeader(h *blockHeader50) (*fileBlockHeader, error) 
 // parseEncryptionBlock calculates the key for block encryption.
 func (a *archive50) parseEncryptionBlock(b readBuf) error {
 	if ver := b.uvarint(); ver != 0 {
-		return errUnknownEncMethod
+		return ErrUnknownEncryptMethod
 	}
 	flags := b.uvarint()
 	if len(b) < 17 {
-		return errCorruptEncrypt
+		return ErrCorruptEncryptData
 	}
 	kdfCount := int(b.byte())
 	salt := b.bytes(16)
@@ -315,7 +413,7 @@ func (a *archive50) parseEncryptionBlock(b readBuf) error {
 	var check []byte
 	if flags&enc5CheckPresent > 0 {
 		if len(b) < 12 {
-			return errCorruptEncrypt
+			return ErrCorruptEncryptData
 		}
 		check = b.bytes(12)
 	}
@@ -357,7 +455,7 @@ func (a *archive50) readBlockHeader(r sliceReader) (*blockHeader50, error) {
 	// check header crc
 	_, _ = hash.Write(b[4:])
 	if crc != hash.Sum32() {
-		return nil, errBadHeaderCrc
+		return nil, ErrBadHeaderCRC
 	}
 
 	b = b[len(b)-size:]
@@ -373,7 +471,7 @@ func (a *archive50) readBlockHeader(r sliceReader) (*blockHeader50, error) {
 		h.dataSize = int64(b.uvarint())
 	}
 	if len(b) < extraSize {
-		return nil, errCorruptHeader
+		return nil, ErrCorruptBlockHeader
 	}
 	h.data = b.bytes(len(b) - extraSize)
 
@@ -381,7 +479,7 @@ func (a *archive50) readBlockHeader(r sliceReader) (*blockHeader50, error) {
 	for len(b) > 0 {
 		size = int(b.uvarint())
 		if len(b) < size {
-			return nil, errCorruptHeader
+			return nil, ErrCorruptBlockHeader
 		}
 		data := readBuf(b.bytes(size))
 		ftype := data.uvarint()

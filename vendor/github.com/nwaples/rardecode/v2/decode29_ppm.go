@@ -136,3 +136,12 @@ func (d *ppm29Decoder) fill(dr *decodeReader) ([]byte, error) {
 	}
 	return nil, nil
 }
+
+func newPPM29Decoder() *ppm29Decoder {
+	ppm := new(ppm29Decoder)
+	ppm.reset()
+	ppm.m.maxOrder = 2
+	ppm.m.a.init(1)
+
+	return ppm
+}

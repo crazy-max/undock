@@ -19,7 +19,7 @@ const (
 )
 
 var (
-	errInvalidVMInstruction = errors.New("rardecode: invalid vm instruction")
+	ErrInvalidVMInstruction = errors.New("rardecode: invalid vm instruction")
 )
 
 type vm struct {
@@ -655,7 +655,7 @@ func readCommands(br *rarBitReader) ([]command, error) {
 		}
 
 		if code >= len(ops) {
-			return cmds, errInvalidVMInstruction
+			return cmds, ErrInvalidVMInstruction
 		}
 		ins := ops[code]
 

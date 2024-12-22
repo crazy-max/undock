@@ -8,9 +8,9 @@ const (
 )
 
 var (
-	errTooManyFilters   = errors.New("rardecode: too many filters")
-	errInvalidFilter    = errors.New("rardecode: invalid filter")
-	errMultipleDecoders = errors.New("rardecode: multiple decoders in a single archive not supported")
+	ErrTooManyFilters   = errors.New("rardecode: too many filters")
+	ErrInvalidFilter    = errors.New("rardecode: invalid filter")
+	ErrMultipleDecoders = errors.New("rardecode: multiple decoders in a single archive not supported")
 )
 
 // filter functions take a byte slice, the current output offset and
@@ -94,10 +94,10 @@ func (d *decodeReader) init(r byteReader, ver int, winsize uint, reset bool, unP
 		case decode20Ver:
 			d.dec = new(decoder20)
 		default:
-			return errUnknownDecoder
+			return ErrUnknownDecoder
 		}
 	} else if d.dec.version() != ver {
-		return errMultipleDecoders
+		return ErrMultipleDecoders
 	}
 	d.dec.init(r, reset, unPackedSize)
 	return nil
@@ -150,7 +150,7 @@ func (d *decodeReader) copyBytes(length, offset int) {
 // queueFilter adds a filterBlock to the end decodeReader's filters.
 func (d *decodeReader) queueFilter(f *filterBlock) error {
 	if len(d.fl) >= maxQueuedFilters {
-		return errTooManyFilters
+		return ErrTooManyFilters
 	}
 	// make offset relative to read index (from write index)
 	f.offset += d.w - d.r
@@ -158,7 +158,7 @@ func (d *decodeReader) queueFilter(f *filterBlock) error {
 	for _, fb := range d.fl {
 		if f.offset < fb.offset {
 			// filter block must not start before previous filter
-			return errInvalidFilter
+			return ErrInvalidFilter
 		}
 		f.offset -= fb.offset
 	}
@@ -243,7 +243,7 @@ func (d *decodeReader) processFilters() ([]byte, error) {
 			return b, nil
 		}
 		if f.length != len(b) {
-			return nil, errInvalidFilter
+			return nil, ErrInvalidFilter
 		}
 	}
 }
@@ -269,7 +269,7 @@ func (d *decodeReader) bytes() ([]byte, error) {
 	// check filters
 	f := d.fl[0]
 	if f.offset < 0 {
-		return nil, errInvalidFilter
+		return nil, ErrInvalidFilter
 	}
 	if f.offset > 0 {
 		// filter not at current read index, output bytes before it

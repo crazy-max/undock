@@ -26,6 +26,7 @@ func (ft *Filetime) Nanoseconds() int64 {
 	nsec -= offset
 	// convert into nanoseconds
 	nsec *= 100
+
 	return nsec
 }
 
@@ -38,5 +39,6 @@ func NsecToFiletime(nsec int64) (ft Filetime) {
 	// split into high / low
 	ft.LowDateTime = uint32(nsec & 0xffffffff)
 	ft.HighDateTime = uint32(nsec >> 32 & 0xffffffff)
+
 	return ft
 }

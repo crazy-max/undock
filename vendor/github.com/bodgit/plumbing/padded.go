@@ -1,7 +1,6 @@
 package plumbing
 
 import (
-	"bytes"
 	"io"
 )
 
@@ -9,6 +8,5 @@ import (
 // fewer than n bytes are available from r then any remaining bytes return
 // fill instead.
 func PaddedReader(r io.Reader, n int64, fill byte) io.Reader {
-	// Naive, but works
-	return io.LimitReader(io.MultiReader(r, bytes.NewBuffer(bytes.Repeat([]byte{fill}, int(n)))), n)
+	return io.LimitReader(io.MultiReader(r, FillReader(fill)), n)
 }

@@ -13,11 +13,11 @@ const (
 )
 
 var (
-	errCorruptHeader     = errors.New("rardecode: corrupt block header")
-	errCorruptFileHeader = errors.New("rardecode: corrupt file header")
-	errBadHeaderCrc      = errors.New("rardecode: bad header crc")
-	errUnknownDecoder    = errors.New("rardecode: unknown decoder version")
-	errDecoderOutOfData  = errors.New("rardecode: decoder expected more data than is in packed file")
+	ErrCorruptBlockHeader = errors.New("rardecode: corrupt block header")
+	ErrCorruptFileHeader  = errors.New("rardecode: corrupt file header")
+	ErrBadHeaderCRC       = errors.New("rardecode: bad header crc")
+	ErrUnknownDecoder     = errors.New("rardecode: unknown decoder version")
+	ErrDecoderOutOfData   = errors.New("rardecode: decoder expected more data than is in packed file")
 )
 
 type readBuf []byte
@@ -37,6 +37,13 @@ func (b *readBuf) uint16() uint16 {
 func (b *readBuf) uint32() uint32 {
 	v := uint32((*b)[0]) | uint32((*b)[1])<<8 | uint32((*b)[2])<<16 | uint32((*b)[3])<<24
 	*b = (*b)[4:]
+	return v
+}
+
+func (b *readBuf) uint64() uint64 {
+	v := uint64((*b)[0]) | uint64((*b)[1])<<8 | uint64((*b)[2])<<16 | uint64((*b)[3])<<24 |
+		uint64((*b)[4])<<32 | uint64((*b)[5])<<40 | uint64((*b)[6])<<48 | uint64((*b)[7])<<56
+	*b = (*b)[8:]
 	return v
 }
 
@@ -111,6 +118,6 @@ func newFileBlockReader(v *volume) (fileBlockReader, error) {
 	case 1:
 		return newArchive50(pass), nil
 	default:
-		return nil, errUnknownArc
+		return nil, ErrUnknownVersion
 	}
 }

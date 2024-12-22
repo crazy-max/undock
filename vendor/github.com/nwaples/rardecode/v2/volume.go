@@ -21,10 +21,10 @@ const (
 )
 
 var (
-	errNoSig            = errors.New("rardecode: RAR signature not found")
-	errVerMismatch      = errors.New("rardecode: volume version mistmatch")
-	errArchiveNameEmpty = errors.New("rardecode: archive name empty")
-	errFileNameRequired = errors.New("rardecode: filename required for multi volume archive")
+	ErrNoSig            = errors.New("rardecode: RAR signature not found")
+	ErrVerMismatch      = errors.New("rardecode: volume version mistmatch")
+	ErrArchiveNameEmpty = errors.New("rardecode: archive name empty")
+	ErrFileNameRequired = errors.New("rardecode: filename required for multi volume archive")
 )
 
 type option struct {
@@ -88,7 +88,7 @@ func (v *volume) openFile(file string) error {
 	var f io.Reader
 
 	if len(file) == 0 {
-		return errArchiveNameEmpty
+		return ErrArchiveNameEmpty
 	}
 	if fs := v.opt.fs; fs != nil {
 		f, err = fs.Open(v.dir + file)
@@ -209,7 +209,7 @@ func (v *volume) findSig() error {
 			continue
 		} else if err != nil {
 			if err == io.EOF {
-				err = errNoSig
+				err = ErrNoSig
 			}
 			return err
 		}
@@ -217,7 +217,7 @@ func (v *volume) findSig() error {
 		b, err = v.br.Peek(len(sigPrefix[1:]) + 2)
 		if err != nil {
 			if err == io.EOF {
-				err = errNoSig
+				err = ErrNoSig
 			}
 			return err
 		}
@@ -235,11 +235,11 @@ func (v *volume) findSig() error {
 		if v.num == 0 {
 			v.ver = ver
 		} else if v.ver != ver {
-			return errVerMismatch
+			return ErrVerMismatch
 		}
 		return err
 	}
-	return errNoSig
+	return ErrNoSig
 }
 
 func nextNewVolName(file string) string {
@@ -321,7 +321,7 @@ func hasDigits(s string) bool {
 	return false
 }
 
-// nextVolName updates name to the next filename in the archive.
+// openNextFile opens the next volume file in the archive.
 func (v *volume) openNextFile() error {
 	file := v.file
 	if v.num == 0 {
@@ -366,7 +366,7 @@ func (v *volume) openNextFile() error {
 
 func (v *volume) next() error {
 	if len(v.file) == 0 {
-		return errFileNameRequired
+		return ErrFileNameRequired
 	}
 	err := v.Close()
 	if err != nil {
