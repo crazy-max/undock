@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/containerd/containerd/platforms"
+	"github.com/containerd/platforms"
 	"github.com/containers/image/v5/manifest"
 	"github.com/crazy-max/undock/pkg/extractor"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
