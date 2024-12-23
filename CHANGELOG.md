@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.0 (2024/12/24)
+
+* Go 1.23 (#271)
+* Alpine Linux 3.21 (#271)
+* Switch to github.com/containerd/platforms (#272)
+* Switch to github.com/mholt/archives (#282)
+* Bump github.com/alecthomas/kong to 1.6.0 (#280)
+* Bump github.com/containers/image/v5 to 5.33.0 (#278)
+* Bump github.com/docker/docker to 27.3.1+incompatible (#281)
+* Bump github.com/stretchr/testify to 1.10.0 (#274)
+* Bump golang.org/x/sync to 0.10.0 (#276)
+* Bump golang.org/x/sys to 0.28.0 (#277)
+
 ## 0.8.0 (2024/06/20)
 
 * Enables automatic API version negotiation for Docker client (#242)
