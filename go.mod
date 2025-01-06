@@ -7,7 +7,7 @@ require (
 	github.com/containerd/platforms v0.2.1
 	github.com/containers/image/v5 v5.33.0
 	github.com/docker/docker v27.3.1+incompatible
-	github.com/mholt/archives v0.0.0-20241216060121-23e0af8fe73d
+	github.com/mholt/archives v0.1.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.0
 	github.com/pkg/errors v0.9.1
