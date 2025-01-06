@@ -398,8 +398,12 @@ func (f ArchiveFS) Open(name string) (fs.File, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := archiveFile.Close(); err != nil {
-			return nil, err
+		if archiveFile != nil {
+			// the archiveFile is closed at return only if there's an
+			// error; in this case, though, we can close it regardless
+			if err := archiveFile.Close(); err != nil {
+				return nil, err
+			}
 		}
 		return &dirFile{
 			info:    dirFileInfo{archiveInfo},
