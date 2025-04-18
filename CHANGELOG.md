@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.10.0 (2025/04/18)
+
+* Fix fallback to home for cache dir by @crazy-max (#316)
+* Bump github.com/alecthomas/kong to 1.10.0 (#286 #311)
+* Bump github.com/containers/image/v5 to 5.33.1 (#289)
+* Bump github.com/mholt/archives to 0.1.1 (#285 #312)
+* Bump github.com/opencontainers/image-spec to 1.1.1 (#303)
+* Bump github.com/rs/zerolog to 1.34.0 (#307)
+* Bump golang.org/x/sync to 0.13.0 (#313)
+* Bump golang.org/x/sys to 0.32.0 (#284 #314)
+
 ## 0.9.0 (2024/12/24)
 
 * Go 1.23 (#271)
