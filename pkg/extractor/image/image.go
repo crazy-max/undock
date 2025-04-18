@@ -65,9 +65,9 @@ func New(ctx context.Context, opts Options) (*extractor.Client, error) {
 	if len(datadir) == 0 {
 		datadir = os.Getenv("XDG_DATA_HOME")
 		if len(datadir) == 0 {
-			home := os.Getenv("HOME")
-			if len(home) == 0 {
-				return nil, errors.New("neither XDG_DATA_HOME nor HOME was set non-empty")
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to get home directory")
 			}
 			datadir = filepath.Join(home, ".local", "share")
 		}
