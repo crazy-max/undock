@@ -438,14 +438,24 @@ func (f ArchiveFS) Open(name string) (fs.File, error) {
 		// paths in archives can't necessarily be trusted; also clean up any "./" prefix
 		file.NameInArchive = path.Clean(file.NameInArchive)
 
-		if !strings.HasPrefix(file.NameInArchive, name) {
+		// ignore this entry if it's neither the file we're looking for, nor
+		// one of its descendents; we can't just check that the filename is
+		// a prefix of the requested file, because that could wrongly match
+		// "a/b/c.jpg.json" if the requested filename is "a/b/c.jpg", and
+		// this could result in loading the wrong file (!!) so we append a
+		// path separator to ensure that can't happen: "a/b/c.jpg.json/"
+		// is not prefixed by "a/b/c.jpg/", but it will still match as we
+		// expect: "a/b/c/d/" is is prefixed by "a/b/c/", allowing us to
+		// match descenedent files, and "a/b/c.jpg/" is prefixed by
+		// "a/b/c.jpg/", allowing us to match exact filenames.
+		if !strings.HasPrefix(file.NameInArchive+"/", name+"/") {
 			return nil
 		}
 
 		// if this is the requested file, and it's a directory, set up the dirFile,
-		// which will include a listing of all its contents as we continue the walk
+		// which will include a listing of all its contents as we continue iterating
 		if file.NameInArchive == name && file.IsDir() {
-			fsFile = &dirFile{info: file} // will fill entries slice as we continue the walk
+			fsFile = &dirFile{info: file} // will fill entries slice as we continue iterating
 			return nil
 		}
 
@@ -467,7 +477,10 @@ func (f ArchiveFS) Open(name string) (fs.File, error) {
 			return err
 		}
 
-		fsFile = closeBoth{File: innerFile, c: archiveFile}
+		fsFile = innerFile
+		if archiveFile != nil {
+			fsFile = closeBoth{File: innerFile, c: archiveFile}
+		}
 
 		if decompressor != nil {
 			fsFile = closeBoth{fsFile, decompressor}
@@ -735,7 +748,8 @@ func (f *ArchiveFS) Sub(dir string) (fs.FS, error) {
 // The exported fields may be changed during the lifetime of a DeepFS value
 // (but not concurrently). It is safe to use this type as an FS concurrently.
 type DeepFS struct {
-	// The root filepath on disk.
+	// The root filepath using OS separator, even if it
+	// traverses into an archive.
 	Root string
 
 	// An optional context, mainly for cancellation.
@@ -856,7 +870,6 @@ func (*DeepFS) splitPath(path string) (realPath, innerPath string) {
 
 	for {
 		part := strings.TrimRight(strings.ToLower(path[start:end]), " ")
-
 		for _, ext := range archiveExtensions {
 			if strings.HasSuffix(part, ext) {
 				// we've found an archive extension, so the path until the end of this segment is

@@ -10,14 +10,17 @@ const (
 	decode20Ver
 	decode29Ver
 	decode50Ver
+	decode70Ver
 )
 
 var (
-	ErrCorruptBlockHeader = errors.New("rardecode: corrupt block header")
-	ErrCorruptFileHeader  = errors.New("rardecode: corrupt file header")
-	ErrBadHeaderCRC       = errors.New("rardecode: bad header crc")
-	ErrUnknownDecoder     = errors.New("rardecode: unknown decoder version")
-	ErrDecoderOutOfData   = errors.New("rardecode: decoder expected more data than is in packed file")
+	ErrCorruptBlockHeader    = errors.New("rardecode: corrupt block header")
+	ErrCorruptFileHeader     = errors.New("rardecode: corrupt file header")
+	ErrBadHeaderCRC          = errors.New("rardecode: bad header crc")
+	ErrUnknownDecoder        = errors.New("rardecode: unknown decoder version")
+	ErrDecoderOutOfData      = errors.New("rardecode: decoder expected more data than is in packed file")
+	ErrArchiveEncrypted      = errors.New("rardecode: archive encrypted, password required")
+	ErrArchivedFileEncrypted = errors.New("rardecode: archived files encrypted, password required")
 )
 
 type readBuf []byte
@@ -90,13 +93,14 @@ type fileBlockHeader struct {
 	first    bool             // first block in file
 	last     bool             // last block in file
 	arcSolid bool             // archive is solid
-	winSize  uint             // log base 2 of decode window size
+	winSize  int              // decode window size
 	hash     func() hash.Hash // hash used for file checksum
 	hashKey  []byte           // optional hmac key to be used calculate file checksum
 	sum      []byte           // expected checksum for file contents
 	decVer   int              // decoder to use for file
 	key      []byte           // key for AES, non-empty if file encrypted
 	iv       []byte           // iv for AES, non-empty if file encrypted
+	genKeys  func() error     // generates key & iv fields
 	FileHeader
 }
 
@@ -108,9 +112,12 @@ type fileBlockReader interface {
 
 func newFileBlockReader(v *volume) (fileBlockReader, error) {
 	pass := v.opt.pass
-	runes := []rune(pass)
-	if len(runes) > maxPassword {
-		pass = string(runes[:maxPassword])
+	if pass != nil {
+		runes := []rune(*pass)
+		if len(runes) > maxPassword {
+			pw := string(runes[:maxPassword])
+			pass = &pw
+		}
 	}
 	switch v.ver {
 	case 0:

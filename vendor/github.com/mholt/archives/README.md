@@ -13,7 +13,7 @@ Introducing **mholt/archives** - a cross-platform, multi-format Go library for w
 	- [`FileFS`](https://pkg.go.dev/github.com/mholt/archives#FileFS)
 	- [`DirFS`](https://pkg.go.dev/github.com/mholt/archives#DirFS)
 	- [`ArchiveFS`](https://pkg.go.dev/github.com/mholt/archives#ArchiveFS)
-- Seamlessly recurse into archive files using [`DeepFS`](https://pkg.go.dev/github.com/mholt/archives#DeepFS)
+- Seamlessly walk into archive files using [`DeepFS`](https://pkg.go.dev/github.com/mholt/archives#DeepFS)
 - Compress and decompress files
 - Create and extract archive files
 - Walk or traverse into archive files
@@ -36,6 +36,7 @@ Introducing **mholt/archives** - a cross-platform, multi-format Go library for w
 - gzip (.gz)
 - lz4 (.lz4)
 - lzip (.lz)
+- minlz (.mz)
 - snappy (.sz) and S2 (.s2)
 - xz (.xz)
 - zlib (.zz)
@@ -240,7 +241,7 @@ if err != nil {
 
 The `archives` package lets you do it all.
 
-**Important .tar note:** Tar files do not efficiently implement file system semantics due to their roots in sequential-access design for tapes. File systems inherently assume random access, but tar files need to be read from the beginning to access something at the end. This is especially slow when the archive is compressed. Optimizations have been implemented to amortize `ReadDir()` calls so that `fs.WalkDir()` only has to scan the archive once, but they use more memory. Open calls require another scan to find the file. It may be more efficient to use `Tar.Extract()` directly if file system semantics are not important to you.
+**Important .tar note:** Tar files do not efficiently implement file system semantics due to their historical roots in sequential-access design for tapes. File systems inherently assume some index facilitating random access, but tar files need to be read from the beginning to access something at the end. This is especially slow when the archive is compressed. Optimizations have been implemented to amortize `ReadDir()` calls so that `fs.WalkDir()` only has to scan the archive once, but they use more memory. Open calls require another scan to find the file. It may be more efficient to use `Tar.Extract()` directly if file system semantics are not important to you.
 
 #### Use with `http.FileServer`
 

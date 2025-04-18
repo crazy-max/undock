@@ -3,6 +3,7 @@ package rardecode
 import (
 	"errors"
 	"io"
+	"math/bits"
 )
 
 const (
@@ -11,6 +12,9 @@ const (
 	lowoffsetSize5 = 16
 	lengthSize5    = 44
 	tableSize5     = mainSize5 + offsetSize5 + lowoffsetSize5 + lengthSize5
+
+	offsetSize7 = 80
+	tableSize7  = mainSize5 + offsetSize7 + lowoffsetSize5 + lengthSize5
 )
 
 var (
@@ -24,7 +28,9 @@ var (
 // the huffman decoders with.
 type decoder50 struct {
 	br         rar5BitReader // bit reader for current data block
-	codeLength [tableSize5]byte
+	buf        [tableSize7]byte
+	codeLength []byte
+	offsetSize int
 
 	lastBlock bool // current block is last block in compressed file
 
@@ -39,18 +45,21 @@ type decoder50 struct {
 
 func (d *decoder50) version() int { return decode50Ver }
 
-func (d *decoder50) init(r byteReader, reset bool, size int64) {
+func (d *decoder50) init(r byteReader, reset bool, size int64, ver int) {
 	d.br.reset(r)
 	d.lastBlock = false
+	if ver == decode70Ver {
+		d.codeLength = d.buf[:]
+		d.offsetSize = offsetSize7
+	} else {
+		d.codeLength = d.buf[:tableSize5]
+		d.offsetSize = offsetSize5
+	}
 
 	if reset {
-		for i := range d.offset {
-			d.offset[i] = 0
-		}
+		clear(d.offset[:])
 		d.length = 0
-		for i := range d.codeLength {
-			d.codeLength[i] = 0
-		}
+		clear(d.codeLength[:])
 	}
 }
 
@@ -100,8 +109,8 @@ func (d *decoder50) readBlockHeader() error {
 		}
 		d.mainDecoder.init(cl[:mainSize5])
 		cl = cl[mainSize5:]
-		d.offsetDecoder.init(cl[:offsetSize5])
-		cl = cl[offsetSize5:]
+		d.offsetDecoder.init(cl[:d.offsetSize])
+		cl = cl[d.offsetSize:]
 		d.lowoffsetDecoder.init(cl[:lowoffsetSize5])
 		cl = cl[lowoffsetSize5:]
 		d.lengthDecoder.init(cl)
@@ -211,25 +220,25 @@ func (d *decoder50) decodeOffset(dr *decodeReader, i int) error {
 	if slot < 4 {
 		offset += slot
 	} else {
-		bits := uint8(slot/2 - 1)
-		offset += (2 | (slot & 1)) << bits
+		bitCount := uint8(slot/2 - 1)
+		offset += (2 | (slot & 1)) << bitCount
 
-		if bits >= 4 {
-			bits -= 4
-			if bits > 0 {
-				if intSize == 32 {
+		if bitCount >= 4 {
+			bitCount -= 4
+			if bitCount > 0 {
+				if bits.UintSize == 32 {
 					// bitReader can only read at most intSize-8 bits.
 					// Split read into two parts.
-					if bits > 24 {
+					if bitCount > 24 {
 						n, err := d.br.readBits(24)
 						if err != nil {
 							return err
 						}
-						bits -= 24
-						offset += n << (4 + bits)
+						bitCount -= 24
+						offset += n << (4 + bitCount)
 					}
 				}
-				n, err := d.br.readBits(bits)
+				n, err := d.br.readBits(bitCount)
 				if err != nil {
 					return err
 				}
@@ -241,7 +250,7 @@ func (d *decoder50) decodeOffset(dr *decodeReader, i int) error {
 			}
 			offset += n
 		} else {
-			n, err := d.br.readBits(bits)
+			n, err := d.br.readBits(bitCount)
 			if err != nil {
 				return err
 			}

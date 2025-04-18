@@ -3,6 +3,7 @@ package rardecode
 import (
 	"errors"
 	"io"
+	"math"
 )
 
 const (
@@ -26,8 +27,7 @@ const (
 	// A unit can store one context or two states.
 	unitSize = 12
 
-	maxUint16 = 1<<16 - 1
-	freeMark  = -1
+	freeMark = -1
 )
 
 var (
@@ -251,9 +251,7 @@ func (a *subAllocator) restart() {
 	a.heap2Lo = a.heap1Hi / unitSize * 2
 	a.heap2Hi = int32(len(a.states))
 	a.glueCount = 0
-	for i := range a.freeList {
-		a.freeList[i] = 0
-	}
+	clear(a.freeList[:])
 }
 
 // pushByte puts a byte on the heap and returns a state.succ index that
@@ -354,7 +352,7 @@ func (a *subAllocator) glueFreeBlocks() {
 		states := a.states[i+u<<1:]
 		for len(states) > 0 && states[0].succ == freeMark {
 			u += int32(states[0].uint16())
-			if u > maxUint16 {
+			if u > math.MaxUint16 {
 				break
 			}
 			states[0].succ = 0
@@ -564,9 +562,7 @@ type model struct {
 }
 
 func (m *model) restart() {
-	for i := range m.charMask {
-		m.charMask[i] = 0
-	}
+	clear(m.charMask[:])
 	m.escCount = 1
 
 	if m.maxOrder < 12 {
@@ -900,9 +896,7 @@ func (m *model) update(minC, maxC context, s *state) context {
 
 	if m.escCount == 0 {
 		m.escCount = 1
-		for i := range m.charMask {
-			m.charMask[i] = 0
-		}
+		clear(m.charMask[:])
 	}
 
 	var ss *state // matching minC.suffix state

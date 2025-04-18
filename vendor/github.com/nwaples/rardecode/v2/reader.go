@@ -8,6 +8,7 @@ import (
 	"errors"
 	"hash"
 	"io"
+	"math"
 	"os"
 	"time"
 )
@@ -41,6 +42,8 @@ type FileHeader struct {
 	Name             string    // file name using '/' as the directory separator
 	IsDir            bool      // is a directory
 	Solid            bool      // is a solid file
+	Encrypted        bool      // file contents are encrypted
+	HeaderEncrypted  bool      // file header is encrypted
 	HostOS           byte      // Host OS the archive was created on
 	Attributes       int64     // Host OS specific file attributes
 	PackedSize       int64     // packed file size (or first block if the file spans volumes)
@@ -97,6 +100,32 @@ func (f *FileHeader) Mode() os.FileMode {
 type byteReader interface {
 	io.Reader
 	bytes() ([]byte, error)
+}
+
+type bufByteReader struct {
+	buf []byte
+}
+
+func (b *bufByteReader) Read(p []byte) (int, error) {
+	if len(b.buf) == 0 {
+		return 0, io.EOF
+	}
+	n := copy(p, b.buf)
+	b.buf = b.buf[n:]
+	return n, nil
+}
+
+func (b *bufByteReader) bytes() ([]byte, error) {
+	if len(b.buf) == 0 {
+		return nil, io.EOF
+	}
+	buf := b.buf
+	b.buf = nil
+	return buf, nil
+}
+
+func newBufByteReader(buf []byte) *bufByteReader {
+	return &bufByteReader{buf: buf}
 }
 
 // packedFileReader provides sequential access to packed files in a RAR archive.
@@ -200,14 +229,9 @@ func (f *packedFileReader) bytes() ([]byte, error) {
 			return nil, err
 		}
 	}
-	n := maxInt
-	if f.n < int64(n) {
-		n = int(f.n)
-	}
+	n := int(min(f.n, math.MaxInt))
 	if k := f.v.br.Buffered(); k > 0 {
-		if k < n {
-			n = k
-		}
+		n = min(k, n)
 	} else {
 		b, err := f.v.peek(n)
 		if err != nil && err != bufio.ErrBufferFull {
@@ -284,6 +308,11 @@ func (cr *checksumReader) eofError() error {
 	// calculate file checksum
 	h := cr.pr.h
 	sum := cr.hash.Sum(nil)
+	if !h.first && h.genKeys != nil {
+		if err := h.genKeys(); err != nil {
+			return err
+		}
+	}
 	if len(h.hashKey) > 0 {
 		mac := hmac.New(sha256.New, h.hashKey)
 		_, _ = mac.Write(sum) // ignore error, should always succeed
@@ -405,8 +434,8 @@ func (r *Reader) nextFile() error {
 	// start with packed file reader
 	r.r = r.pr
 	// check for encryption
-	if len(h.key) > 0 && len(h.iv) > 0 {
-		r.r = newAesDecryptReader(r.pr, h.key, h.iv) // decrypt
+	if h.genKeys != nil {
+		r.r = newAesDecryptReader(r.pr, h) // decrypt
 	}
 	// check for compression
 	if h.decVer > 0 {
