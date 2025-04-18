@@ -63,8 +63,8 @@ func newVM(mem []byte) *vm {
 		copy(v.m, mem)
 	} else {
 		v.m = mem[:vmSize+4]
-		for i := len(mem); i < len(v.m); i++ {
-			v.m[i] = 0
+		if l := len(mem); l < len(v.m) {
+			clear(v.m[l:])
 		}
 	}
 	v.r[7] = vmSize

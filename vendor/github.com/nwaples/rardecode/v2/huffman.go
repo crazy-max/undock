@@ -49,9 +49,7 @@ func (h *huffmanDecoder) init(codeLengths []byte) {
 
 	if cap(h.symbol) >= len(codeLengths) {
 		h.symbol = h.symbol[:len(codeLengths)]
-		for i := range h.symbol {
-			h.symbol[i] = 0
-		}
+		clear(h.symbol)
 	} else {
 		h.symbol = make([]uint16, len(codeLengths))
 	}

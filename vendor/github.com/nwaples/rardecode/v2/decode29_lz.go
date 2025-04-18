@@ -47,13 +47,9 @@ type lz29Decoder struct {
 }
 
 func (d *lz29Decoder) reset() {
-	for i := range d.offset {
-		d.offset[i] = 0
-	}
+	clear(d.offset[:])
 	d.length = 0
-	for i := range d.codeLength {
-		d.codeLength[i] = 0
-	}
+	clear(d.codeLength[:])
 }
 
 func (d *lz29Decoder) init(br *rarBitReader) error {

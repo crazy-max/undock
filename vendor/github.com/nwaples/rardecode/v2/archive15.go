@@ -250,9 +250,11 @@ func (a *archive15) parseFileHeader(h *blockHeader15) (*fileBlockHeader, error) 
 
 	f.Solid = h.flags&fileSolid > 0
 	f.arcSolid = a.solid
+	f.Encrypted = h.flags&fileEncrypted > 0
+	f.HeaderEncrypted = a.encrypted
 	f.IsDir = h.flags&fileWindowMask == fileWindowMask
 	if !f.IsDir {
-		f.winSize = uint(h.flags&fileWindowMask)>>5 + 16
+		f.winSize = 0x10000 << ((h.flags & fileWindowMask) >> 5)
 	}
 
 	b := h.data
@@ -313,7 +315,7 @@ func (a *archive15) parseFileHeader(h *blockHeader15) (*fileBlockHeader, error) 
 		if len(b) < saltSize {
 			return nil, ErrCorruptFileHeader
 		}
-		salt = b.bytes(saltSize)
+		salt = append([]byte(nil), b.bytes(saltSize)...)
 	}
 	if h.flags&fileExtTime > 0 {
 		readExtTimes(f, &b)
@@ -324,7 +326,13 @@ func (a *archive15) parseFileHeader(h *blockHeader15) (*fileBlockHeader, error) 
 	}
 	// fields only needed for first block in a file
 	if h.flags&fileEncrypted > 0 && len(salt) == saltSize {
-		f.key, f.iv = a.getKeys(salt)
+		f.genKeys = func() error {
+			if a.pass == nil {
+				return ErrArchivedFileEncrypted
+			}
+			f.key, f.iv = a.getKeys(salt)
+			return nil
+		}
 	}
 	f.hash = newLittleEndianCRC32
 	if method != 0 {
@@ -346,6 +354,9 @@ func (a *archive15) parseFileHeader(h *blockHeader15) (*fileBlockHeader, error) 
 // It will return io.EOF if there were no bytes read.
 func (a *archive15) readBlockHeader(r sliceReader) (*blockHeader15, error) {
 	if a.encrypted {
+		if a.pass == nil {
+			return nil, ErrArchiveEncrypted
+		}
 		salt, err := r.readSlice(saltSize)
 		if err != nil {
 			return nil, err
@@ -461,8 +472,10 @@ func (a *archive15) next(v *volume) (*fileBlockHeader, error) {
 }
 
 // newArchive15 creates a new fileBlockReader for a Version 1.5 archive
-func newArchive15(password string) *archive15 {
+func newArchive15(password *string) *archive15 {
 	a := new(archive15)
-	a.pass = utf16.Encode([]rune(password)) // convert to UTF-16
+	if password != nil {
+		a.pass = utf16.Encode([]rune(*password)) // convert to UTF-16
+	}
 	return a
 }

@@ -1,12 +1,8 @@
 package rardecode
 
-import "io"
-
-const (
-	maxUint     = ^uint(0)
-	logintBytes = maxUint>>8&1 + maxUint>>16&1 + maxUint>>32&1
-	intBytes    = 1 << logintBytes
-	intSize     = intBytes << 3 // number of bits in an int
+import (
+	"io"
+	"math/bits"
 )
 
 type bitReader interface {
@@ -73,7 +69,7 @@ func (r *rar5BitReader) readBits(n uint8) (int, error) {
 			}
 		}
 		// try to fit as many bits into r.v as possible
-		for len(r.b) > 0 && r.n <= intSize-8 {
+		for len(r.b) > 0 && r.n <= bits.UintSize-8 {
 			r.v = r.v<<8 | int(r.b[0])
 			r.b = r.b[1:]
 			r.n += 8
@@ -166,7 +162,7 @@ func (r *rarBitReader) readBits(n uint8) (int, error) {
 			}
 		}
 		// try to fit as many bits into r.v as possible
-		for len(r.b) > 0 && r.n <= intSize-8 {
+		for len(r.b) > 0 && r.n <= bits.UintSize-8 {
 			r.v = r.v<<8 | int(r.b[0])
 			r.b = r.b[1:]
 			r.n += 8
@@ -192,7 +188,7 @@ func (r *rarBitReader) readUint32() (uint32, error) {
 		return 0, err
 	}
 	if n != 1 {
-		if intSize == 32 {
+		if bits.UintSize == 32 {
 			if n == 3 {
 				// 32bit platforms may not be able to read 32 bits as r.v
 				// will need up to 7 extra bits for overflow from reading a byte.

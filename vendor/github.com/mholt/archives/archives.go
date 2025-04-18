@@ -57,7 +57,7 @@ func (f FileInfo) Stat() (fs.FileInfo, error) { return f.FileInfo, nil }
 // archive recursively, rooted at the named directory. They should use the
 // platform's path separator (backslash on Windows; slash on everything else).
 // For convenience, map keys that end in a separator ('/', or '\' on Windows)
-// will enumerate contents only without adding the folder itself to the archive.
+// will enumerate contents only, without adding the folder itself to the archive.
 //
 // Map values should typically use slash ('/') as the separator regardless of
 // the platform, as most archive formats standardize on that rune as the
@@ -153,11 +153,24 @@ func nameOnDiskToNameInArchive(nameOnDisk, rootOnDisk, rootInArchive string) str
 	// one function is easier to reason about and test. I suspect the performance
 	// penalty is insignificant.
 	if strings.HasSuffix(rootOnDisk, string(filepath.Separator)) {
+		// "map keys that end in a separator will enumerate contents only,
+		// without adding the folder itself to the archive."
 		rootInArchive = trimTopDir(rootInArchive)
 	} else if rootInArchive == "" {
+		// "map values that are empty string are interpreted as the base name
+		// of the file (sans path) in the root of the archive"
 		rootInArchive = filepath.Base(rootOnDisk)
 	}
+	if rootInArchive == "." {
+		// an in-archive root of "." is an escape hatch for the above rule
+		// where an empty in-archive root means to use the base name of the
+		// file; if the user does not want this, they can specify a "." to
+		// still put it in the root of the archive
+		rootInArchive = ""
+	}
 	if strings.HasSuffix(rootInArchive, "/") {
+		// "map values that end in a slash will use the base name of the file in
+		// that folder of the archive."
 		rootInArchive += filepath.Base(rootOnDisk)
 	}
 	truncPath := strings.TrimPrefix(nameOnDisk, rootOnDisk)
@@ -167,27 +180,22 @@ func nameOnDiskToNameInArchive(nameOnDisk, rootOnDisk, rootInArchive string) str
 // trimTopDir strips the top or first directory from the path.
 // It expects a forward-slashed path.
 //
-// For example, "a/b/c" => "b/c".
+// Examples: "a/b/c" => "b/c", "/a/b/c" => "b/c"
 func trimTopDir(dir string) string {
-	if len(dir) > 0 && dir[0] == '/' {
-		dir = dir[1:]
-	}
-	if pos := strings.Index(dir, "/"); pos >= 0 {
-		return dir[pos+1:]
-	}
-	return dir
+	return strings.TrimPrefix(dir, topDir(dir)+"/")
 }
 
 // topDir returns the top or first directory in the path.
 // It expects a forward-slashed path.
 //
-// For example, "a/b/c" => "a".
+// Examples: "a/b/c" => "a", "/a/b/c" => "/a"
 func topDir(dir string) string {
+	var start int
 	if len(dir) > 0 && dir[0] == '/' {
-		dir = dir[1:]
+		start = 1
 	}
-	if pos := strings.Index(dir, "/"); pos >= 0 {
-		return dir[:pos]
+	if pos := strings.Index(dir[start:], "/"); pos >= 0 {
+		return dir[:pos+start]
 	}
 	return dir
 }

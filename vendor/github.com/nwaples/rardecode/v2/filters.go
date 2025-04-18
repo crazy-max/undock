@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"hash/crc32"
 	"io"
+	"math"
 )
 
 const (
@@ -12,8 +13,6 @@ const (
 	vmGlobalAddr      = 0x3C000
 	vmGlobalSize      = 0x02000
 	vmFixedGlobalSize = 0x40
-
-	maxUint32 = 1<<32 - 1
 )
 
 // v3Filter is the interface type for RAR V3 filters.
@@ -78,12 +77,12 @@ func e8e9FilterV3(r map[int]uint32, global, buf []byte, offset int64) ([]byte, e
 func getBits(buf []byte, pos, count uint) uint32 {
 	n := binary.LittleEndian.Uint32(buf[pos/8:])
 	n >>= pos & 7
-	mask := uint32(maxUint32) >> (32 - count)
+	mask := uint32(math.MaxUint32) >> (32 - count)
 	return n & mask
 }
 
 func setBits(buf []byte, pos, count uint, bits uint32) {
-	mask := uint32(maxUint32) >> (32 - count)
+	mask := uint32(math.MaxUint32) >> (32 - count)
 	mask <<= pos & 7
 	bits <<= pos & 7
 	n := binary.LittleEndian.Uint32(buf[pos/8:])
@@ -387,7 +386,7 @@ func getV3Filter(code []byte) (v3Filter, error) {
 
 	// create new vm filter
 	f := new(vmFilter)
-	r := &rarBitReader{b: code[1:]} // skip first xor byte check
+	r := newRarBitReader(newBufByteReader(code[1:])) // skip first xor byte check
 
 	// read static data
 	n, err := r.readBits(1)
