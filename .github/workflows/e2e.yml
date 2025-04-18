@@ -54,8 +54,9 @@ jobs:
         uses: docker/setup-buildx-action@v3
       -
         name: Build
-        uses: docker/bake-action@v5
+        uses: docker/bake-action@v6
         with:
+          source: .
           targets: binary
       -
         name: Run
@@ -93,6 +94,7 @@ jobs:
         name: Build
         uses: docker/bake-action@v5
         with:
+          source: .
           targets: binary
       -
         name: Run
@@ -125,6 +127,7 @@ jobs:
         name: Build
         uses: docker/bake-action@v5
         with:
+          source: .
           targets: binary
       -
         name: Create Dockerfile
@@ -163,6 +166,7 @@ jobs:
         name: Build
         uses: docker/bake-action@v5
         with:
+          source: .
           targets: binary
       -
         name: Create docker archive
