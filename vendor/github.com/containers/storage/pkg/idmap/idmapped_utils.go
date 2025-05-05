@@ -25,7 +25,7 @@ func CreateIDMappedMount(source, target string, pid int) error {
 	}
 	defer userNsFile.Close()
 
-	targetDirFd, err := unix.OpenTree(0, source, unix.OPEN_TREE_CLONE)
+	targetDirFd, err := unix.OpenTree(unix.AT_FDCWD, source, unix.OPEN_TREE_CLONE)
 	if err != nil {
 		return &os.PathError{Op: "open_tree", Path: source, Err: err}
 	}
@@ -33,8 +33,9 @@ func CreateIDMappedMount(source, target string, pid int) error {
 
 	if err := unix.MountSetattr(targetDirFd, "", unix.AT_EMPTY_PATH|unix.AT_RECURSIVE,
 		&unix.MountAttr{
-			Attr_set:  unix.MOUNT_ATTR_IDMAP,
-			Userns_fd: uint64(userNsFile.Fd()),
+			Attr_set:    unix.MOUNT_ATTR_IDMAP,
+			Userns_fd:   uint64(userNsFile.Fd()),
+			Propagation: unix.MS_PRIVATE,
 		}); err != nil {
 		return &os.PathError{Op: "mount_setattr", Path: source, Err: err}
 	}
