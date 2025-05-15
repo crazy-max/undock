@@ -53,7 +53,7 @@ github.com/acarl005/stripansi
 # github.com/alecthomas/kong v1.10.0
 ## explicit; go 1.20
 github.com/alecthomas/kong
-# github.com/andybalholm/brotli v1.1.1
+# github.com/andybalholm/brotli v1.1.2-0.20250424173009-453214e765f3
 ## explicit; go 1.13
 github.com/andybalholm/brotli
 github.com/andybalholm/brotli/matchfinder
@@ -433,7 +433,7 @@ github.com/mattn/go-runewidth
 # github.com/mattn/go-sqlite3 v1.14.24
 ## explicit; go 1.19
 github.com/mattn/go-sqlite3
-# github.com/mholt/archives v0.1.1
+# github.com/mholt/archives v0.1.2
 ## explicit; go 1.22.2
 github.com/mholt/archives
 # github.com/miekg/pkcs11 v1.1.1
