@@ -53,7 +53,7 @@ github.com/acarl005/stripansi
 # github.com/alecthomas/kong v1.10.0
 ## explicit; go 1.20
 github.com/alecthomas/kong
-# github.com/andybalholm/brotli v1.1.1
+# github.com/andybalholm/brotli v1.1.2-0.20250424173009-453214e765f3
 ## explicit; go 1.13
 github.com/andybalholm/brotli
 github.com/andybalholm/brotli/matchfinder
@@ -433,12 +433,15 @@ github.com/mattn/go-runewidth
 # github.com/mattn/go-sqlite3 v1.14.24
 ## explicit; go 1.19
 github.com/mattn/go-sqlite3
-# github.com/mholt/archives v0.1.1
+# github.com/mholt/archives v0.1.3
 ## explicit; go 1.22.2
 github.com/mholt/archives
 # github.com/miekg/pkcs11 v1.1.1
 ## explicit; go 1.12
 github.com/miekg/pkcs11
+# github.com/mikelolasagasti/xz v1.0.1
+## explicit; go 1.15
+github.com/mikelolasagasti/xz
 # github.com/minio/minlz v1.0.0
 ## explicit; go 1.21
 github.com/minio/minlz
@@ -553,9 +556,6 @@ github.com/sylabs/sif/v2/pkg/sif
 # github.com/tchap/go-patricia/v2 v2.3.1
 ## explicit; go 1.16
 github.com/tchap/go-patricia/v2/patricia
-# github.com/therootcompany/xz v1.0.1
-## explicit; go 1.15
-github.com/therootcompany/xz
 # github.com/titanous/rocacheck v0.0.0-20171023193734-afe73141d399
 ## explicit
 github.com/titanous/rocacheck
