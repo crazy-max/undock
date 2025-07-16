@@ -18,8 +18,11 @@ import (
 
 	// register all of the built-in drivers
 	_ "github.com/containers/storage/drivers/register"
+	"golang.org/x/sync/errgroup"
 
 	drivers "github.com/containers/storage/drivers"
+	"github.com/containers/storage/internal/dedup"
+	"github.com/containers/storage/internal/tempdir"
 	"github.com/containers/storage/pkg/archive"
 	"github.com/containers/storage/pkg/directory"
 	"github.com/containers/storage/pkg/idtools"
@@ -29,7 +32,6 @@ import (
 	"github.com/containers/storage/pkg/stringutils"
 	"github.com/containers/storage/pkg/system"
 	"github.com/containers/storage/types"
-	"github.com/hashicorp/go-multierror"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"github.com/sirupsen/logrus"
@@ -161,10 +163,30 @@ type flaggableStore interface {
 	ClearFlag(id string, flag string) error
 
 	// SetFlag sets a named flag and its value on an item in the store.
-	SetFlag(id string, flag string, value interface{}) error
+	SetFlag(id string, flag string, value any) error
 }
 
 type StoreOptions = types.StoreOptions
+
+type DedupHashMethod = dedup.DedupHashMethod
+
+const (
+	DedupHashInvalid  = dedup.DedupHashInvalid
+	DedupHashCRC      = dedup.DedupHashCRC
+	DedupHashFileSize = dedup.DedupHashFileSize
+	DedupHashSHA256   = dedup.DedupHashSHA256
+)
+
+type (
+	DedupOptions = dedup.DedupOptions
+	DedupResult  = dedup.DedupResult
+)
+
+// DedupArgs is used to pass arguments to the Dedup command.
+type DedupArgs struct {
+	// Options that are passed directly to the internal/dedup.DedupDirs function.
+	Options DedupOptions
+}
 
 // Store wraps up the various types of file-based stores that we use into a
 // singleton object that initializes and manages them all together.
@@ -341,15 +363,11 @@ type Store interface {
 	//   }
 	ApplyDiff(to string, diff io.Reader) (int64, error)
 
-	// ApplyDiffWithDiffer applies a diff to a layer.
-	// It is the caller responsibility to clean the staging directory if it is not
-	// successfully applied with ApplyStagedLayer.
-	// Deprecated: Use PrepareStagedLayer instead.  ApplyDiffWithDiffer is going to be removed in a future release
-	ApplyDiffWithDiffer(to string, options *drivers.ApplyDiffWithDifferOpts, differ drivers.Differ) (*drivers.DriverWithDifferOutput, error)
-
 	// PrepareStagedLayer applies a diff to a layer.
 	// It is the caller responsibility to clean the staging directory if it is not
 	// successfully applied with ApplyStagedLayer.
+	// The caller must ensure [Store.ApplyStagedLayer] or [Store.CleanupStagedLayer] is called eventually
+	// with the returned [drivers.DriverWithDifferOutput] object.
 	PrepareStagedLayer(options *drivers.ApplyDiffWithDifferOpts, differ drivers.Differ) (*drivers.DriverWithDifferOutput, error)
 
 	// ApplyStagedLayer combines the functions of creating a layer and using the staging
@@ -589,6 +607,9 @@ type Store interface {
 	// MultiList returns consistent values as of a single point in time.
 	// WARNING: The values may already be out of date by the time they are returned to the caller.
 	MultiList(MultiListOptions) (MultiListResult, error)
+
+	// Dedup deduplicates layers in the store.
+	Dedup(DedupArgs) (drivers.DedupResult, error)
 }
 
 // AdditionalLayer represents a layer that is contained in the additional layer store
@@ -648,7 +669,7 @@ type LayerOptions struct {
 	// Flags is a set of named flags and their values to store with the layer.
 	// Currently these can only be set when the layer record is created, but that
 	// could change in the future.
-	Flags map[string]interface{}
+	Flags map[string]any
 }
 
 type LayerBigDataOption struct {
@@ -676,7 +697,7 @@ type ImageOptions struct {
 	NamesHistory []string
 	// Flags is a set of named flags and their values to store with the image.  Currently these can only
 	// be set when the image record is created, but that could change in the future.
-	Flags map[string]interface{}
+	Flags map[string]any
 }
 
 type ImageBigDataOption struct {
@@ -696,7 +717,7 @@ type ContainerOptions struct {
 	// Flags is a set of named flags and their values to store with the container.
 	// Currently these can only be set when the container record is created, but that
 	// could change in the future.
-	Flags      map[string]interface{}
+	Flags      map[string]any
 	MountOpts  []string
 	Volatile   bool
 	StorageOpt map[string]string
@@ -1425,16 +1446,7 @@ func (s *store) writeToAllStores(fn func(rlstore rwLayerStore) error) error {
 // On entry:
 // - rlstore must be locked for writing
 func (s *store) canUseShifting(uidmap, gidmap []idtools.IDMap) bool {
-	if !s.graphDriver.SupportsShifting() {
-		return false
-	}
-	if uidmap != nil && !idtools.IsContiguous(uidmap) {
-		return false
-	}
-	if gidmap != nil && !idtools.IsContiguous(gidmap) {
-		return false
-	}
-	return true
+	return s.graphDriver.SupportsShifting(uidmap, gidmap)
 }
 
 // On entry:
@@ -1625,7 +1637,7 @@ func (s *store) CreateImage(id string, names []string, layer, metadata string, i
 			options.BigData = append(options.BigData, copyImageBigDataOptionSlice(iOptions.BigData)...)
 			options.NamesHistory = append(options.NamesHistory, iOptions.NamesHistory...)
 			if options.Flags == nil {
-				options.Flags = make(map[string]interface{})
+				options.Flags = make(map[string]any)
 			}
 			maps.Copy(options.Flags, iOptions.Flags)
 		}
@@ -1747,7 +1759,7 @@ func (s *store) imageTopLayerForMapping(image *Image, ristore roImageStore, rlst
 	}
 	// By construction, createMappedLayer can only be true if ristore == s.imageStore.
 	if err = s.imageStore.addMappedTopLayer(image.ID, mappedLayer.ID); err != nil {
-		if err2 := rlstore.Delete(mappedLayer.ID); err2 != nil {
+		if err2 := rlstore.deleteWhileHoldingLock(mappedLayer.ID); err2 != nil {
 			err = fmt.Errorf("deleting layer %q: %v: %w", mappedLayer.ID, err2, err)
 		}
 		return nil, fmt.Errorf("registering ID-mapped layer with image %q: %w", image.ID, err)
@@ -1894,7 +1906,7 @@ func (s *store) CreateContainer(id string, names []string, image, layer, metadat
 		}
 	}
 	if options.Flags == nil {
-		options.Flags = make(map[string]interface{})
+		options.Flags = make(map[string]any)
 	}
 	plabel, _ := options.Flags[processLabelFlag].(string)
 	mlabel, _ := options.Flags[mountLabelFlag].(string)
@@ -1932,7 +1944,7 @@ func (s *store) CreateContainer(id string, names []string, image, layer, metadat
 		}
 		container, err := s.containerStore.create(id, names, imageID, layer, &options)
 		if err != nil || container == nil {
-			if err2 := rlstore.Delete(layer); err2 != nil {
+			if err2 := rlstore.deleteWhileHoldingLock(layer); err2 != nil {
 				if err == nil {
 					err = fmt.Errorf("deleting layer %#v: %w", layer, err2)
 				} else {
@@ -2529,7 +2541,13 @@ func (s *store) Lookup(name string) (string, error) {
 	return "", ErrLayerUnknown
 }
 
-func (s *store) DeleteLayer(id string) error {
+func (s *store) DeleteLayer(id string) (retErr error) {
+	cleanupFunctions := []tempdir.CleanupTempDirFunc{}
+	defer func() {
+		if cleanupErr := tempdir.CleanupTemporaryDirectories(cleanupFunctions...); cleanupErr != nil {
+			retErr = errors.Join(cleanupErr, retErr)
+		}
+	}()
 	return s.writeToAllStores(func(rlstore rwLayerStore) error {
 		if rlstore.Exists(id) {
 			if l, err := rlstore.Get(id); err != nil {
@@ -2563,7 +2581,9 @@ func (s *store) DeleteLayer(id string) error {
 					return fmt.Errorf("layer %v used by container %v: %w", id, container.ID, ErrLayerUsedByContainer)
 				}
 			}
-			if err := rlstore.Delete(id); err != nil {
+			cf, err := rlstore.deferredDelete(id)
+			cleanupFunctions = append(cleanupFunctions, cf...)
+			if err != nil {
 				return fmt.Errorf("delete layer %v: %w", id, err)
 			}
 
@@ -2580,8 +2600,14 @@ func (s *store) DeleteLayer(id string) error {
 	})
 }
 
-func (s *store) DeleteImage(id string, commit bool) (layers []string, err error) {
+func (s *store) DeleteImage(id string, commit bool) (layers []string, retErr error) {
 	layersToRemove := []string{}
+	cleanupFunctions := []tempdir.CleanupTempDirFunc{}
+	defer func() {
+		if cleanupErr := tempdir.CleanupTemporaryDirectories(cleanupFunctions...); cleanupErr != nil {
+			retErr = errors.Join(cleanupErr, retErr)
+		}
+	}()
 	if err := s.writeToAllStores(func(rlstore rwLayerStore) error {
 		// Delete image from all available imagestores configured to be used.
 		imageFound := false
@@ -2687,7 +2713,9 @@ func (s *store) DeleteImage(id string, commit bool) (layers []string, err error)
 		}
 		if commit {
 			for _, layer := range layersToRemove {
-				if err = rlstore.Delete(layer); err != nil {
+				cf, err := rlstore.deferredDelete(layer)
+				cleanupFunctions = append(cleanupFunctions, cf...)
+				if err != nil {
 					return err
 				}
 			}
@@ -2699,7 +2727,13 @@ func (s *store) DeleteImage(id string, commit bool) (layers []string, err error)
 	return layersToRemove, nil
 }
 
-func (s *store) DeleteContainer(id string) error {
+func (s *store) DeleteContainer(id string) (retErr error) {
+	cleanupFunctions := []tempdir.CleanupTempDirFunc{}
+	defer func() {
+		if cleanupErr := tempdir.CleanupTemporaryDirectories(cleanupFunctions...); cleanupErr != nil {
+			retErr = errors.Join(cleanupErr, retErr)
+		}
+	}()
 	return s.writeToAllStores(func(rlstore rwLayerStore) error {
 		if !s.containerStore.Exists(id) {
 			return ErrNotAContainer
@@ -2715,12 +2749,14 @@ func (s *store) DeleteContainer(id string) error {
 		// the container record that refers to it, effectively losing
 		// track of it
 		if rlstore.Exists(container.LayerID) {
-			if err := rlstore.Delete(container.LayerID); err != nil {
+			cf, err := rlstore.deferredDelete(container.LayerID)
+			cleanupFunctions = append(cleanupFunctions, cf...)
+			if err != nil {
 				return err
 			}
 		}
 
-		var wg multierror.Group
+		var wg errgroup.Group
 
 		middleDir := s.graphDriverName + "-containers"
 
@@ -2735,18 +2771,26 @@ func (s *store) DeleteContainer(id string) error {
 		})
 
 		if multierr := wg.Wait(); multierr != nil {
-			return multierr.ErrorOrNil()
+			return multierr
 		}
 		return s.containerStore.Delete(id)
 	})
 }
 
-func (s *store) Delete(id string) error {
+func (s *store) Delete(id string) (retErr error) {
+	cleanupFunctions := []tempdir.CleanupTempDirFunc{}
+	defer func() {
+		if cleanupErr := tempdir.CleanupTemporaryDirectories(cleanupFunctions...); cleanupErr != nil {
+			retErr = errors.Join(cleanupErr, retErr)
+		}
+	}()
 	return s.writeToAllStores(func(rlstore rwLayerStore) error {
 		if s.containerStore.Exists(id) {
 			if container, err := s.containerStore.Get(id); err == nil {
 				if rlstore.Exists(container.LayerID) {
-					if err = rlstore.Delete(container.LayerID); err != nil {
+					cf, err := rlstore.deferredDelete(container.LayerID)
+					cleanupFunctions = append(cleanupFunctions, cf...)
+					if err != nil {
 						return err
 					}
 					if err = s.containerStore.Delete(id); err != nil {
@@ -2770,7 +2814,9 @@ func (s *store) Delete(id string) error {
 			return s.imageStore.Delete(id)
 		}
 		if rlstore.Exists(id) {
-			return rlstore.Delete(id)
+			cf, err := rlstore.deferredDelete(id)
+			cleanupFunctions = append(cleanupFunctions, cf...)
+			return err
 		}
 		return ErrLayerUnknown
 	})
@@ -2806,7 +2852,11 @@ func (s *store) Version() ([][2]string, error) {
 	return [][2]string{}, nil
 }
 
-func (s *store) mount(id string, options drivers.MountOpts) (string, error) {
+func (s *store) MountImage(id string, mountOpts []string, mountLabel string) (string, error) {
+	if err := validateMountOptions(mountOpts); err != nil {
+		return "", err
+	}
+
 	// We need to make sure the home mount is present when the Mount is done, which happens by possibly reinitializing the graph driver
 	// in startUsingGraphDriver().
 	if err := s.startUsingGraphDriver(); err != nil {
@@ -2818,57 +2868,61 @@ func (s *store) mount(id string, options drivers.MountOpts) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if options.UidMaps != nil || options.GidMaps != nil {
-		options.DisableShifting = !s.canUseShifting(options.UidMaps, options.GidMaps)
-	}
+	var imageHomeStore roImageStore
 
-	// function used to have a scope for rlstore.StopWriting()
-	tryMount := func() (string, error) {
-		if err := rlstore.startWriting(); err != nil {
+	if err := rlstore.startWriting(); err != nil {
+		return "", err
+	}
+	defer rlstore.stopWriting()
+	for _, s := range lstores {
+		if err := s.startReading(); err != nil {
 			return "", err
 		}
-		defer rlstore.stopWriting()
-		if rlstore.Exists(id) {
-			return rlstore.Mount(id, options)
-		}
-		return "", nil
+		defer s.stopReading()
 	}
-	mountPoint, err := tryMount()
-	if mountPoint != "" || err != nil {
-		return mountPoint, err
+	if err := s.imageStore.startWriting(); err != nil {
+		return "", err
+	}
+	defer s.imageStore.stopWriting()
+
+	cimage, err := s.imageStore.Get(id)
+	if err == nil {
+		imageHomeStore = s.imageStore
+	} else {
+		for _, s := range s.roImageStores {
+			if err := s.startReading(); err != nil {
+				return "", err
+			}
+			defer s.stopReading()
+			cimage, err = s.Get(id)
+			if err == nil {
+				imageHomeStore = s
+				break
+			}
+		}
+	}
+	if cimage == nil {
+		return "", fmt.Errorf("locating image with ID %q: %w", id, ErrImageUnknown)
 	}
 
-	// check if the layer is in a read-only store, and return a better error message
-	for _, store := range lstores {
-		if err := store.startReading(); err != nil {
-			return "", err
-		}
-		exists := store.Exists(id)
-		store.stopReading()
-		if exists {
-			return "", fmt.Errorf("mounting read/only store images is not allowed: %w", ErrStoreIsReadOnly)
-		}
+	idmappingsOpts := types.IDMappingOptions{
+		HostUIDMapping: true,
+		HostGIDMapping: true,
 	}
-
-	return "", ErrLayerUnknown
-}
-
-func (s *store) MountImage(id string, mountOpts []string, mountLabel string) (string, error) {
-	// Append ReadOnly option to mountOptions
-	img, err := s.Image(id)
+	ilayer, err := s.imageTopLayerForMapping(cimage, imageHomeStore, rlstore, lstores, idmappingsOpts)
 	if err != nil {
 		return "", err
 	}
 
-	if err := validateMountOptions(mountOpts); err != nil {
-		return "", err
+	if len(ilayer.UIDMap) > 0 || len(ilayer.GIDMap) > 0 {
+		return "", fmt.Errorf("cannot create an image with canonical UID/GID mappings in a read-only store")
 	}
+
 	options := drivers.MountOpts{
 		MountLabel: mountLabel,
 		Options:    append(mountOpts, "ro"),
 	}
-
-	return s.mount(img.TopLayer, options)
+	return rlstore.Mount(ilayer.ID, options)
 }
 
 func (s *store) Mount(id, mountLabel string) (string, error) {
@@ -2890,7 +2944,43 @@ func (s *store) Mount(id, mountLabel string) (string, error) {
 			}
 		}
 	}
-	return s.mount(id, options)
+
+	// We need to make sure the home mount is present when the Mount is done, which happens by possibly reinitializing the graph driver
+	// in startUsingGraphDriver().
+	if err := s.startUsingGraphDriver(); err != nil {
+		return "", err
+	}
+	defer s.stopUsingGraphDriver()
+
+	rlstore, lstores, err := s.bothLayerStoreKindsLocked()
+	if err != nil {
+		return "", err
+	}
+	if options.UidMaps != nil || options.GidMaps != nil {
+		options.DisableShifting = !s.canUseShifting(options.UidMaps, options.GidMaps)
+	}
+
+	if err := rlstore.startWriting(); err != nil {
+		return "", err
+	}
+	defer rlstore.stopWriting()
+	if rlstore.Exists(id) {
+		return rlstore.Mount(id, options)
+	}
+
+	// check if the layer is in a read-only store, and return a better error message
+	for _, store := range lstores {
+		if err := store.startReading(); err != nil {
+			return "", err
+		}
+		exists := store.Exists(id)
+		store.stopReading()
+		if exists {
+			return "", fmt.Errorf("mounting read/only store images is not allowed: %w", ErrStoreIsReadOnly)
+		}
+	}
+
+	return "", ErrLayerUnknown
 }
 
 func (s *store) Mounted(id string) (int, error) {
@@ -2914,7 +3004,23 @@ func (s *store) UnmountImage(id string, force bool) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return s.Unmount(img.TopLayer, force)
+
+	return writeToLayerStore(s, func(lstore rwLayerStore) (bool, error) {
+		for _, layerID := range img.MappedTopLayers {
+			l, err := lstore.Get(layerID)
+			if err != nil {
+				if err == ErrLayerUnknown {
+					continue
+				}
+				return false, err
+			}
+			// check if the layer with the canonical mapping is in the mapped top layers
+			if len(l.UIDMap) == 0 && len(l.GIDMap) == 0 {
+				return lstore.unmount(l.ID, force, false)
+			}
+		}
+		return lstore.unmount(img.TopLayer, force, false)
+	})
 }
 
 func (s *store) Unmount(id string, force bool) (bool, error) {
@@ -3048,6 +3154,12 @@ func (s *store) Diff(from, to string, options *DiffOptions) (io.ReadCloser, erro
 }
 
 func (s *store) ApplyStagedLayer(args ApplyStagedLayerOptions) (*Layer, error) {
+	defer func() {
+		if args.DiffOutput.TarSplit != nil {
+			args.DiffOutput.TarSplit.Close()
+			args.DiffOutput.TarSplit = nil
+		}
+	}()
 	rlstore, rlstores, err := s.bothLayerStoreKinds()
 	if err != nil {
 		return nil, err
@@ -3079,6 +3191,10 @@ func (s *store) ApplyStagedLayer(args ApplyStagedLayerOptions) (*Layer, error) {
 }
 
 func (s *store) CleanupStagedLayer(diffOutput *drivers.DriverWithDifferOutput) error {
+	if diffOutput.TarSplit != nil {
+		diffOutput.TarSplit.Close()
+		diffOutput.TarSplit = nil
+	}
 	_, err := writeToLayerStore(s, func(rlstore rwLayerStore) (struct{}, error) {
 		return struct{}{}, rlstore.CleanupStagingDirectory(diffOutput.Target)
 	})
@@ -3091,13 +3207,6 @@ func (s *store) PrepareStagedLayer(options *drivers.ApplyDiffWithDifferOpts, dif
 		return nil, err
 	}
 	return rlstore.applyDiffWithDifferNoLock(options, differ)
-}
-
-func (s *store) ApplyDiffWithDiffer(to string, options *drivers.ApplyDiffWithDifferOpts, differ drivers.Differ) (*drivers.DriverWithDifferOutput, error) {
-	if to != "" {
-		return nil, fmt.Errorf("ApplyDiffWithDiffer does not support non-empty 'layer' parameter")
-	}
-	return s.PrepareStagedLayer(options, differ)
 }
 
 func (s *store) DifferTarget(id string) (string, error) {
@@ -3639,7 +3748,7 @@ func makeBigDataBaseName(key string) string {
 		if err != nil || size != 1 {
 			break
 		}
-		if ch != '.' && !(ch >= '0' && ch <= '9') && !(ch >= 'a' && ch <= 'z') {
+		if ch != '.' && (ch < '0' || ch > '9') && (ch < 'a' || ch > 'z') {
 			break
 		}
 	}
@@ -3679,11 +3788,10 @@ func copyMapPreferringNil[K comparable, V any](m map[K]V) map[K]V {
 // newMapFrom returns a shallow clone of map m.
 // If m is empty, an empty map is allocated and returned.
 func newMapFrom[K comparable, V any](m map[K]V) map[K]V {
-	ret := make(map[K]V, len(m))
-	for k, v := range m {
-		ret[k] = v
+	if len(m) == 0 {
+		return make(map[K]V, 0)
 	}
-	return ret
+	return maps.Clone(m)
 }
 
 func copyImageBigDataOptionSlice(slice []ImageBigDataOption) []ImageBigDataOption {
@@ -3842,4 +3950,44 @@ func (s *store) MultiList(options MultiListOptions) (MultiListResult, error) {
 		out.Containers = append(out.Containers, containers...)
 	}
 	return out, nil
+}
+
+// Dedup deduplicates layers in the store.
+func (s *store) Dedup(req DedupArgs) (drivers.DedupResult, error) {
+	imgs, err := s.Images()
+	if err != nil {
+		return drivers.DedupResult{}, err
+	}
+	var topLayers []string
+	for _, i := range imgs {
+		topLayers = append(topLayers, i.TopLayer)
+		topLayers = append(topLayers, i.MappedTopLayers...)
+	}
+	return writeToLayerStore(s, func(rlstore rwLayerStore) (drivers.DedupResult, error) {
+		layers := make(map[string]struct{})
+		for _, i := range topLayers {
+			cur := i
+			for cur != "" {
+				if _, visited := layers[cur]; visited {
+					break
+				}
+				l, err := rlstore.Get(cur)
+				if err != nil {
+					if err == ErrLayerUnknown {
+						break
+					}
+					return drivers.DedupResult{}, err
+				}
+				layers[cur] = struct{}{}
+				cur = l.Parent
+			}
+		}
+		r := drivers.DedupArgs{
+			Options: req.Options,
+		}
+		for l := range layers {
+			r.Layers = append(r.Layers, l)
+		}
+		return rlstore.dedup(r)
+	})
 }

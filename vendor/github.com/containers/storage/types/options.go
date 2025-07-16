@@ -160,19 +160,17 @@ func loadStoreOptionsFromConfFile(storageConf string) (StoreOptions, error) {
 		defaultRootlessGraphRoot = storageOpts.GraphRoot
 		storageOpts = StoreOptions{}
 		reloadConfigurationFileIfNeeded(storageConf, &storageOpts)
-		if usePerUserStorage() {
-			// If the file did not specify a graphroot or runroot,
-			// set sane defaults so we don't try and use root-owned
-			// directories
-			if storageOpts.RunRoot == "" {
-				storageOpts.RunRoot = defaultRootlessRunRoot
-			}
-			if storageOpts.GraphRoot == "" {
-				if storageOpts.RootlessStoragePath != "" {
-					storageOpts.GraphRoot = storageOpts.RootlessStoragePath
-				} else {
-					storageOpts.GraphRoot = defaultRootlessGraphRoot
-				}
+		// If the file did not specify a graphroot or runroot,
+		// set sane defaults so we don't try and use root-owned
+		// directories
+		if storageOpts.RunRoot == "" {
+			storageOpts.RunRoot = defaultRootlessRunRoot
+		}
+		if storageOpts.GraphRoot == "" {
+			if storageOpts.RootlessStoragePath != "" {
+				storageOpts.GraphRoot = storageOpts.RootlessStoragePath
+			} else {
+				storageOpts.GraphRoot = defaultRootlessGraphRoot
 			}
 		}
 	}
@@ -394,7 +392,7 @@ func ReloadConfigurationFileIfNeeded(configFile string, storeOptions *StoreOptio
 	}
 
 	mtime := fi.ModTime()
-	if prevReloadConfig.storeOptions != nil && prevReloadConfig.mod == mtime && prevReloadConfig.configFile == configFile {
+	if prevReloadConfig.storeOptions != nil && mtime.Equal(prevReloadConfig.mod) && prevReloadConfig.configFile == configFile {
 		*storeOptions = *prevReloadConfig.storeOptions
 		return nil
 	}
