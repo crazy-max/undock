@@ -55,6 +55,16 @@ func Exit(exit func(int)) Option {
 	})
 }
 
+// WithHyphenPrefixedParameters enables or disables hyphen-prefixed parameters.
+//
+// These are disabled by default.
+func WithHyphenPrefixedParameters(enable bool) Option {
+	return OptionFunc(func(k *Kong) error {
+		k.allowHyphenated = enable
+		return nil
+	})
+}
+
 type embedded struct {
 	strct any
 	tags  []string
@@ -89,10 +99,6 @@ type dynamicCommand struct {
 // "tags" is a list of extra tag strings to parse, in the form <key>:"<value>".
 func DynamicCommand(name, help, group string, cmd any, tags ...string) Option {
 	return OptionFunc(func(k *Kong) error {
-		if run := getMethod(reflect.Indirect(reflect.ValueOf(cmd)), "Run"); !run.IsValid() {
-			return fmt.Errorf("kong: DynamicCommand %q must be a type with a 'Run' method; got %T", name, cmd)
-		}
-
 		k.dynamicCommands = append(k.dynamicCommands, &dynamicCommand{
 			name:  name,
 			help:  help,
