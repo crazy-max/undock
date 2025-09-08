@@ -1,6 +1,6 @@
 module github.com/crazy-max/undock
 
-go 1.23.0
+go 1.24.0
 
 require (
 	github.com/alecthomas/kong v1.10.0
@@ -14,7 +14,7 @@ require (
 	github.com/rs/zerolog v1.34.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/sync v0.13.0
+	golang.org/x/sync v0.17.0
 	golang.org/x/sys v0.32.0
 )
 
