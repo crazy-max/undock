@@ -57,7 +57,7 @@ func Decode(dst, src []byte) ([]byte, error) {
 	}
 
 	if !isMLZ {
-		if l, _ := s2.DecodedLen(block); l > MaxBlockSize {
+		if l, _ := s2.DecodedLen(block); l > s2.MaxBlockSize {
 			return nil, ErrTooLarge
 		}
 		if dst, err := s2.Decode(dst, block); err != nil {

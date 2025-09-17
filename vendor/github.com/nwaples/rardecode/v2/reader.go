@@ -1,14 +1,12 @@
 package rardecode
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"errors"
 	"hash"
 	"io"
-	"math"
 	"os"
 	"time"
 )
@@ -229,12 +227,12 @@ func (f *packedFileReader) bytes() ([]byte, error) {
 			return nil, err
 		}
 	}
-	n := int(min(f.n, math.MaxInt))
+	n := int(min(f.n, int64(f.v.br.Size())))
 	if k := f.v.br.Buffered(); k > 0 {
 		n = min(k, n)
 	} else {
 		b, err := f.v.peek(n)
-		if err != nil && err != bufio.ErrBufferFull {
+		if err != nil {
 			return nil, err
 		}
 		n = len(b)

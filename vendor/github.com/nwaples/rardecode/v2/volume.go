@@ -170,21 +170,21 @@ func (v *volume) peek(n int) ([]byte, error) {
 }
 
 func (v *volume) readSlice(n int) ([]byte, error) {
-	b, err := v.br.Peek(n)
-	if err == nil {
+	if n <= v.br.Size() {
+		b, err := v.br.Peek(n)
+		if err != nil {
+			if err == io.EOF && len(b) > 0 {
+				err = io.ErrUnexpectedEOF
+			}
+			return nil, err
+		}
 		n, err = v.br.Discard(n)
 		v.off += int64(n)
 		return b[:n:n], err
 	}
-	if err != bufio.ErrBufferFull {
-		if err == io.EOF && len(b) > 0 {
-			err = io.ErrUnexpectedEOF
-		}
-		return nil, err
-	}
 	// bufio.Reader buffer is too small, create a new slice and copy to it
-	b = make([]byte, n)
-	if _, err = io.ReadFull(v.br, b); err != nil {
+	b := make([]byte, n)
+	if _, err := io.ReadFull(v.br, b); err != nil {
 		return nil, err
 	}
 	v.off += int64(n)

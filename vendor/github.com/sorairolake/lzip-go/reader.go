@@ -65,8 +65,8 @@ func NewReader(r io.Reader) (*Reader, error) {
 	binary.LittleEndian.PutUint32(lzmaHeader[1:5], dictSize)
 	copy(lzmaHeader[5:], rb[len(rb)-16:len(rb)-8])
 
-	z.trailer.memberSize = uint64(headerSize + len(rb))
-	if memberSize := z.trailer.memberSize; memberSize > MaxMemberSize {
+	z.memberSize = uint64(headerSize + len(rb))
+	if memberSize := z.memberSize; memberSize > MaxMemberSize {
 		return nil, &MemberSizeTooLargeError{memberSize}
 	}
 
@@ -92,8 +92,8 @@ func (z *Reader) Read(p []byte) (n int, err error) {
 			return n, err
 		}
 
-		z.trailer.crc = crc32.Update(z.trailer.crc, crc32.IEEETable, p[:n])
-		z.trailer.dataSize += uint64(n)
+		z.crc = crc32.Update(z.crc, crc32.IEEETable, p[:n])
+		z.dataSize += uint64(n)
 
 		if !errors.Is(err, io.EOF) {
 			return n, err
@@ -105,17 +105,17 @@ func (z *Reader) Read(p []byte) (n int, err error) {
 		}
 
 		crc := binary.LittleEndian.Uint32(trailer[:4])
-		if crc != z.trailer.crc {
+		if crc != z.crc {
 			return n, &InvalidCRCError{crc}
 		}
 
 		dataSize := binary.LittleEndian.Uint64(trailer[4:12])
-		if dataSize != z.trailer.dataSize {
+		if dataSize != z.dataSize {
 			return n, &InvalidDataSizeError{dataSize}
 		}
 
 		memberSize := binary.LittleEndian.Uint64(trailer[12:])
-		if memberSize != z.trailer.memberSize {
+		if memberSize != z.memberSize {
 			return n, &InvalidMemberSizeError{memberSize}
 		}
 	}

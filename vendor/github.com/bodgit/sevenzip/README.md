@@ -2,7 +2,7 @@
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/6882/badge)](https://www.bestpractices.dev/projects/6882)
 [![GitHub release](https://img.shields.io/github/v/release/bodgit/sevenzip)](https://github.com/bodgit/sevenzip/releases)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/bodgit/sevenzip/build.yml?branch=main)](https://github.com/bodgit/sevenzip/actions?query=workflow%3ABuild)
-[![Coverage Status](https://coveralls.io/repos/github/bodgit/sevenzip/badge.svg?branch=master)](https://coveralls.io/github/bodgit/sevenzip?branch=master)
+[![Coverage Status](https://coveralls.io/repos/github/bodgit/sevenzip/badge.svg?branch=main)](https://coveralls.io/github/bodgit/sevenzip?branch=main)
 [![Go Report Card](https://goreportcard.com/badge/github.com/bodgit/sevenzip)](https://goreportcard.com/report/github.com/bodgit/sevenzip)
 [![GoDoc](https://godoc.org/github.com/bodgit/sevenzip?status.svg)](https://godoc.org/github.com/bodgit/sevenzip)
 ![Go version](https://img.shields.io/badge/Go-1.22-brightgreen.svg)
@@ -123,7 +123,7 @@ The worst scenario would likely be to extract the archive in reverse order.
 ### Detecting the wrong password
 
 It's virtually impossible to _reliably_ detect the wrong password versus some other corruption in a password protected archive.
-This is partly due to how CBC decryption works; with the wrong password you don't get any sort of decryption error, you just a stream of bytes that aren't the correct ones.
+This is partly due to how CBC decryption works; with the wrong password you don't get any sort of decryption error, you just get a stream of bytes that aren't the correct ones.
 This manifests itself when the file has been compressed _and_ encrypted; during extraction the file is decrypted and then decompressed so with the wrong password the decompression algorithm gets handed a stream which isn't valid so that's the error you see.
 
 A `sevenzip.ReadError` error type can be returned for certain operations.

@@ -12,6 +12,9 @@ tmp*
 # VSCode config
 /.vscode/
 
+# Release
+/dist/
+
 # macOS trash
 .DS_Store
 ._.DS_Store

@@ -41,8 +41,8 @@ github.com/Microsoft/hcsshim/internal/vmcompute
 github.com/Microsoft/hcsshim/internal/wclayer
 github.com/Microsoft/hcsshim/internal/winapi
 github.com/Microsoft/hcsshim/osversion
-# github.com/STARRY-S/zip v0.2.1
-## explicit; go 1.22.2
+# github.com/STARRY-S/zip v0.2.3
+## explicit; go 1.23
 github.com/STARRY-S/zip
 # github.com/VividCortex/ewma v1.2.0
 ## explicit; go 1.12
@@ -53,8 +53,8 @@ github.com/acarl005/stripansi
 # github.com/alecthomas/kong v1.10.0
 ## explicit; go 1.20
 github.com/alecthomas/kong
-# github.com/andybalholm/brotli v1.1.1
-## explicit; go 1.13
+# github.com/andybalholm/brotli v1.2.0
+## explicit; go 1.22
 github.com/andybalholm/brotli
 github.com/andybalholm/brotli/matchfinder
 # github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
@@ -63,8 +63,8 @@ github.com/asaskevich/govalidator
 # github.com/bodgit/plumbing v1.3.0
 ## explicit; go 1.13
 github.com/bodgit/plumbing
-# github.com/bodgit/sevenzip v1.6.0
-## explicit; go 1.19
+# github.com/bodgit/sevenzip v1.6.1
+## explicit; go 1.21
 github.com/bodgit/sevenzip
 github.com/bodgit/sevenzip/internal/aes7z
 github.com/bodgit/sevenzip/internal/bcj2
@@ -433,13 +433,16 @@ github.com/mattn/go-runewidth
 # github.com/mattn/go-sqlite3 v1.14.24
 ## explicit; go 1.19
 github.com/mattn/go-sqlite3
-# github.com/mholt/archives v0.1.1
-## explicit; go 1.22.2
+# github.com/mholt/archives v0.1.4
+## explicit; go 1.23.0
 github.com/mholt/archives
 # github.com/miekg/pkcs11 v1.1.1
 ## explicit; go 1.12
 github.com/miekg/pkcs11
-# github.com/minio/minlz v1.0.0
+# github.com/mikelolasagasti/xz v1.0.1
+## explicit; go 1.15
+github.com/mikelolasagasti/xz
+# github.com/minio/minlz v1.0.1
 ## explicit; go 1.21
 github.com/minio/minlz
 github.com/minio/minlz/internal/race
@@ -467,7 +470,7 @@ github.com/modern-go/concurrent
 # github.com/modern-go/reflect2 v1.0.2
 ## explicit; go 1.12
 github.com/modern-go/reflect2
-# github.com/nwaples/rardecode/v2 v2.1.0
+# github.com/nwaples/rardecode/v2 v2.1.1
 ## explicit; go 1.21
 github.com/nwaples/rardecode/v2
 # github.com/oklog/ulid v1.3.1
@@ -492,7 +495,7 @@ github.com/opencontainers/selinux/pkg/pwalkdir
 ## explicit
 github.com/ostreedev/ostree-go/pkg/glibobject
 github.com/ostreedev/ostree-go/pkg/otbuiltin
-# github.com/pierrec/lz4/v4 v4.1.21
+# github.com/pierrec/lz4/v4 v4.1.22
 ## explicit; go 1.14
 github.com/pierrec/lz4/v4
 github.com/pierrec/lz4/v4/internal/lz4block
@@ -536,9 +539,14 @@ github.com/sigstore/sigstore/pkg/signature/payload
 # github.com/sirupsen/logrus v1.9.3
 ## explicit; go 1.13
 github.com/sirupsen/logrus
-# github.com/sorairolake/lzip-go v0.3.5
+# github.com/sorairolake/lzip-go v0.3.8
 ## explicit; go 1.22
 github.com/sorairolake/lzip-go
+# github.com/spf13/afero v1.11.0
+## explicit; go 1.19
+github.com/spf13/afero
+github.com/spf13/afero/internal/common
+github.com/spf13/afero/mem
 # github.com/stefanberger/go-pkcs11uri v0.0.0-20230803200340-78284954bff6
 ## explicit; go 1.19
 github.com/stefanberger/go-pkcs11uri
@@ -553,13 +561,10 @@ github.com/sylabs/sif/v2/pkg/sif
 # github.com/tchap/go-patricia/v2 v2.3.1
 ## explicit; go 1.16
 github.com/tchap/go-patricia/v2/patricia
-# github.com/therootcompany/xz v1.0.1
-## explicit; go 1.15
-github.com/therootcompany/xz
 # github.com/titanous/rocacheck v0.0.0-20171023193734-afe73141d399
 ## explicit
 github.com/titanous/rocacheck
-# github.com/ulikunitz/xz v0.5.12
+# github.com/ulikunitz/xz v0.5.15
 ## explicit; go 1.12
 github.com/ulikunitz/xz
 github.com/ulikunitz/xz/internal/hash
@@ -624,7 +629,6 @@ go.opentelemetry.io/otel/trace/embedded
 # go4.org v0.0.0-20230225012048-214862532bf5
 ## explicit; go 1.13
 go4.org/readerutil
-go4.org/syncutil
 # golang.org/x/crypto v0.31.0
 ## explicit; go 1.20
 golang.org/x/crypto/cast5
@@ -653,7 +657,7 @@ golang.org/x/net/http2/hpack
 golang.org/x/net/idna
 golang.org/x/net/internal/timeseries
 golang.org/x/net/trace
-# golang.org/x/sync v0.13.0
+# golang.org/x/sync v0.16.0
 ## explicit; go 1.23.0
 golang.org/x/sync/errgroup
 golang.org/x/sync/semaphore
@@ -667,8 +671,8 @@ golang.org/x/sys/windows/registry
 # golang.org/x/term v0.27.0
 ## explicit; go 1.18
 golang.org/x/term
-# golang.org/x/text v0.21.0
-## explicit; go 1.18
+# golang.org/x/text v0.28.0
+## explicit; go 1.23.0
 golang.org/x/text/encoding
 golang.org/x/text/encoding/internal
 golang.org/x/text/encoding/internal/identifier

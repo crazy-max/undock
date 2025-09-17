@@ -204,7 +204,7 @@ func (u *Updater) init(size int64) error {
 // file name at the end of the zip file.
 //
 // The file's contents must be written to the io.Writer before the next
-// call to [Append], [AppendHeader], or [Close].
+// call to [Updater.Append], [Updater.AppendHeader], or [Updater.Close].
 func (u *Updater) Append(name string, mode AppendMode) (io.Writer, error) {
 	h := &FileHeader{
 		Name:   name,
@@ -492,6 +492,40 @@ func (u *Updater) Close() error {
 	if err != nil {
 		return err
 	}
+	if err = u.writeDirectory(start); err != nil {
+		return fmt.Errorf("zip: write directory: %w", err)
+	}
+	currentOffset, err := u.rw.offset()
+	if err != nil {
+		return err
+	}
+	fileEndOffset, err := u.rw.Seek(0, io.SeekEnd)
+	if err != nil {
+		return err
+	}
+	if fileEndOffset > currentOffset {
+		// https://github.com/STARRY-S/zip/issues/3
+		// The directory record is not at the end of the file, re-write the
+		// directory record to ensure that the record is at the end of the file.
+		offset := fileEndOffset - currentOffset
+		if start < u.dirOffset {
+			u.dirOffset += offset
+		} else {
+			u.dirOffset = start + offset
+		}
+		_, err = u.rw.Seek(start, io.SeekStart)
+		if err != nil {
+			return err
+		}
+		if err = u.writeDirectory(start); err != nil {
+			return fmt.Errorf("zip: write directory: %w", err)
+		}
+	}
+	return nil
+}
+
+func (u *Updater) writeDirectory(start int64) error {
+	var err error
 	if start < u.dirOffset {
 		// Make data to `\0` between the last file and the diretory record.
 		// NOTE: this step is not mandatory but will make the file data clean.
@@ -638,7 +672,6 @@ func (u *Updater) Close() error {
 	if _, err := io.WriteString(u.rw, u.comment); err != nil {
 		return err
 	}
-
 	return nil
 }
 

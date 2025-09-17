@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"os"
 	"path"
 	"strings"
 
@@ -166,10 +167,20 @@ func (z Zip) archiveOneFile(ctx context.Context, zw *zip.Writer, idx int, file F
 		return fmt.Errorf("creating header for file %d: %s: %w", idx, file.Name(), err)
 	}
 
+	// file won't be considered a symlink if FollowSymlinks in FilesFromDisk is true
+	if isSymlink(file) {
+		_, err := w.Write([]byte(file.LinkTarget))
+		if err != nil {
+			return fmt.Errorf("writing link target for file %d: %s: %w", idx, file.Name(), err)
+		}
+		return nil
+	}
+
 	// directories have no file body
 	if file.IsDir() {
 		return nil
 	}
+
 	if err := openAndCopyFile(file, w); err != nil {
 		return fmt.Errorf("writing file %d: %s: %w", idx, file.Name(), err)
 	}
@@ -215,10 +226,16 @@ func (z Zip) Extract(ctx context.Context, sourceArchive io.Reader, handleFile Fi
 		}
 
 		info := f.FileInfo()
+		linkTarget, err := z.getLinkTarget(f)
+		if err != nil {
+			return fmt.Errorf("getting link target for file %d: %s: %w", i, f.Name, err)
+		}
+
 		file := FileInfo{
 			FileInfo:      info,
 			Header:        f.FileHeader,
 			NameInArchive: f.Name,
+			LinkTarget:    linkTarget,
 			Open: func() (fs.File, error) {
 				openedFile, err := f.Open()
 				if err != nil {
@@ -228,7 +245,7 @@ func (z Zip) Extract(ctx context.Context, sourceArchive io.Reader, handleFile Fi
 			},
 		}
 
-		err := handleFile(ctx, file)
+		err = handleFile(ctx, file)
 		if errors.Is(err, fs.SkipAll) {
 			break
 		} else if errors.Is(err, fs.SkipDir) && file.IsDir() {
@@ -262,6 +279,33 @@ func (z Zip) decodeText(hdr *zip.FileHeader) {
 			}
 		}
 	}
+}
+
+func (z Zip) getLinkTarget(f *zip.File) (string, error) {
+	info := f.FileInfo()
+	// Exit early if not a symlink
+	if info.Mode()&os.ModeSymlink == 0 {
+		return "", nil
+	}
+
+	// Open the file and read the link target
+	file, err := f.Open()
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	const maxLinkTargetSize = 32768
+	linkTargetBytes, err := io.ReadAll(io.LimitReader(file, maxLinkTargetSize))
+	if err != nil {
+		return "", err
+	}
+
+	if len(linkTargetBytes) == maxLinkTargetSize {
+		return "", fmt.Errorf("link target is too large: %d bytes", len(linkTargetBytes))
+	}
+
+	return string(linkTargetBytes), nil
 }
 
 // Insert appends the listed files into the provided Zip archive stream.
@@ -304,7 +348,7 @@ func (z Zip) Insert(ctx context.Context, into io.ReadWriteSeeker, files []FileIn
 			}
 		}
 
-		w, err := zu.Append(hdr.Name, szip.APPEND_MODE_OVERWRITE)
+		w, err := zu.AppendHeader(hdr, szip.APPEND_MODE_OVERWRITE)
 		if err != nil {
 			return fmt.Errorf("inserting file header: %d: %s: %w", idx, file.Name(), err)
 		}
