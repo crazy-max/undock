@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.11.0 (2025/12/30)
+
+* Go 1.25 (#368)
+* Alpine Linux 3.23 (#372)
+* MkDocs Materials 9.6.20 (#375)
+* Bump github.com/alecthomas/kong to 1.13.0 (#360)
+* Bump github.com/docker/docker to 28.5.2+incompatible (#357 #369 #370)
+* Bump github.com/mholt/archives to 0.1.5 (#354)
+* Bump go.podman.io/image/v5 to 5.38.0 (#369 #371)
+* Bump golang.org/x/crypto to 0.45.0 (#373)
+* Bump golang.org/x/sync to 0.19.0 (#363)
+* Bump golang.org/x/sys to 0.39.0 (#362)
+
 ## 0.10.0 (2025/04/18)
 
 * Fix fallback to home for cache dir by @crazy-max (#316)
