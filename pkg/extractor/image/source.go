@@ -3,9 +3,9 @@ package image
 import (
 	"strings"
 
-	"github.com/containers/image/v5/transports/alltransports"
-	"github.com/containers/image/v5/types"
 	"github.com/crazy-max/undock/pkg/image"
+	"go.podman.io/image/v5/transports/alltransports"
+	"go.podman.io/image/v5/types"
 )
 
 var sourceSchemes = []string{"containers-storage", "docker", "docker-archive", "docker-daemon", "oci", "oci-archive", "ostree"}
