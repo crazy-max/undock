@@ -108,8 +108,8 @@ func (c *Client) Extract() error {
 
 	var mans []manifestEntry
 
-	mtype := manifest.GuessMIMEType(manblob)
-	if mtype == ocispecs.MediaTypeImageManifest {
+	switch manifest.GuessMIMEType(manblob) {
+	case ocispecs.MediaTypeImageManifest:
 		man, err := manifest.OCI1FromManifest(manblob)
 		if err != nil {
 			return errors.Wrap(err, "cannot create OCI manifest instance from blob")
@@ -118,7 +118,7 @@ func (c *Client) Extract() error {
 			platform: c.opts.Platform,
 			manifest: man,
 		})
-	} else if mtype == ocispecs.MediaTypeImageIndex {
+	case ocispecs.MediaTypeImageIndex:
 		ocindex, err := manifest.OCI1IndexFromManifest(manblob)
 		if err != nil {
 			return errors.Wrap(err, "cannot create OCI manifest index instance from blob")
