@@ -9,12 +9,12 @@ import (
 	"strings"
 
 	"github.com/containerd/platforms"
-	"github.com/containers/image/v5/manifest"
 	"github.com/crazy-max/undock/pkg/extractor"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"go.podman.io/image/v5/manifest"
 	"golang.org/x/sync/errgroup"
 )
 

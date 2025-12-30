@@ -8,17 +8,17 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/containers/image/v5/copy"
-	"github.com/containers/image/v5/docker"
-	"github.com/containers/image/v5/docker/reference"
-	"github.com/containers/image/v5/pkg/docker/config"
-	"github.com/containers/image/v5/signature"
-	"github.com/containers/image/v5/transports/alltransports"
-	"github.com/containers/image/v5/types"
 	dockercli "github.com/crazy-max/undock/pkg/docker"
 	"github.com/crazy-max/undock/pkg/image"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"go.podman.io/image/v5/copy"
+	"go.podman.io/image/v5/docker"
+	"go.podman.io/image/v5/docker/reference"
+	"go.podman.io/image/v5/pkg/docker/config"
+	"go.podman.io/image/v5/signature"
+	"go.podman.io/image/v5/transports/alltransports"
+	"go.podman.io/image/v5/types"
 )
 
 func (c *Client) cacheSource(src string) ([]byte, string, error) {
