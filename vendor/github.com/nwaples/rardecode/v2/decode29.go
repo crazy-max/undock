@@ -1,6 +1,7 @@
 package rardecode
 
 import (
+	"bytes"
 	"errors"
 	"io"
 )
@@ -73,7 +74,7 @@ func readVMCode(br *rarBitReader) ([]byte, error) {
 		return nil, ErrInvalidFilter
 	}
 	buf := make([]byte, n)
-	err = br.readFull(buf)
+	_, err = io.ReadFull(br, buf)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +91,7 @@ func readVMCode(br *rarBitReader) ([]byte, error) {
 
 func (d *decoder29) parseVMFilter(buf []byte) (*filterBlock, error) {
 	flags := buf[0]
-	br := newRarBitReader(newBufByteReader(buf[1:]))
+	br := newRarBitReader(bytes.NewReader(buf[1:]))
 	fb := new(filterBlock)
 
 	// Find the filter number which is an index into d.filters.
@@ -181,7 +182,7 @@ func (d *decoder29) parseVMFilter(buf []byte) (*filterBlock, error) {
 			return nil, ErrInvalidFilter
 		}
 		g = make([]byte, n)
-		err = br.readFull(g)
+		_, err = io.ReadFull(br, g)
 		if err != nil {
 			return nil, err
 		}

@@ -9,8 +9,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
-	"io/fs"
-	"os"
+	iofs "io/fs"
 	"path"
 	"path/filepath"
 	"sort"
@@ -21,7 +20,7 @@ import (
 	"github.com/bodgit/plumbing"
 	"github.com/bodgit/sevenzip/internal/pool"
 	"github.com/bodgit/sevenzip/internal/util"
-	"github.com/hashicorp/go-multierror"
+	"github.com/spf13/afero"
 	"go4.org/readerutil"
 )
 
@@ -64,7 +63,7 @@ type Reader struct {
 
 // A ReadCloser is a [Reader] that must be closed when no longer needed.
 type ReadCloser struct {
-	f []*os.File
+	f []afero.File
 	Reader
 }
 
@@ -84,7 +83,7 @@ type fileReader struct {
 	n  int64
 }
 
-func (fr *fileReader) Stat() (fs.FileInfo, error) {
+func (fr *fileReader) Stat() (iofs.FileInfo, error) {
 	return headerFileInfo{&fr.f.FileHeader}, nil
 }
 
@@ -188,56 +187,56 @@ func (f *File) Open() (io.ReadCloser, error) {
 	}, nil
 }
 
-// OpenReaderWithPassword will open the 7-zip file specified by name using
-// password as the basis of the decryption key and return a [*ReadCloser]. If
-// name has a ".001" suffix it is assumed there are multiple volumes and each
-// sequential volume will be opened.
-//
-//nolint:cyclop,funlen
-func OpenReaderWithPassword(name, password string) (*ReadCloser, error) {
-	f, err := os.Open(filepath.Clean(name))
+func openReader(fs afero.Fs, name string) (io.ReaderAt, int64, []afero.File, error) {
+	f, err := fs.Open(filepath.Clean(name))
 	if err != nil {
-		return nil, fmt.Errorf("sevenzip: error opening: %w", err)
+		return nil, 0, nil, fmt.Errorf("sevenzip: error opening: %w", err)
 	}
 
 	info, err := f.Stat()
 	if err != nil {
-		err = multierror.Append(err, f.Close())
+		err = errors.Join(err, f.Close())
 
-		return nil, fmt.Errorf("sevenzip: error retrieving file info: %w", err)
+		return nil, 0, nil, fmt.Errorf("sevenzip: error retrieving file info: %w", err)
 	}
 
 	var reader io.ReaderAt = f
 
 	size := info.Size()
-	files := []*os.File{f}
+	files := []afero.File{f}
 
 	if ext := filepath.Ext(name); ext == ".001" {
 		sr := []readerutil.SizeReaderAt{io.NewSectionReader(f, 0, size)}
 
 		for i := 2; true; i++ {
-			f, err := os.Open(fmt.Sprintf("%s.%03d", strings.TrimSuffix(name, ext), i))
+			f, err := fs.Open(fmt.Sprintf("%s.%03d", strings.TrimSuffix(name, ext), i))
 			if err != nil {
-				if errors.Is(err, fs.ErrNotExist) {
+				if errors.Is(err, iofs.ErrNotExist) {
 					break
 				}
 
+				errs := make([]error, 0, len(files)+1)
+				errs = append(errs, err)
+
 				for _, file := range files {
-					err = multierror.Append(err, file.Close())
+					errs = append(errs, file.Close())
 				}
 
-				return nil, fmt.Errorf("sevenzip: error opening: %w", err)
+				return nil, 0, nil, fmt.Errorf("sevenzip: error opening: %w", errors.Join(errs...))
 			}
 
 			files = append(files, f)
 
 			info, err = f.Stat()
 			if err != nil {
+				errs := make([]error, 0, len(files)+1)
+				errs = append(errs, err)
+
 				for _, file := range files {
-					err = multierror.Append(err, file.Close())
+					errs = append(errs, file.Close())
 				}
 
-				return nil, fmt.Errorf("sevenzip: error retrieving file info: %w", err)
+				return nil, 0, nil, fmt.Errorf("sevenzip: error retrieving file info: %w", errors.Join(errs...))
 			}
 
 			sr = append(sr, io.NewSectionReader(f, 0, info.Size()))
@@ -247,15 +246,31 @@ func OpenReaderWithPassword(name, password string) (*ReadCloser, error) {
 		reader, size = mr, mr.Size()
 	}
 
+	return reader, size, files, nil
+}
+
+// OpenReaderWithPassword will open the 7-zip file specified by name using
+// password as the basis of the decryption key and return a [*ReadCloser]. If
+// name has a ".001" suffix it is assumed there are multiple volumes and each
+// sequential volume will be opened.
+func OpenReaderWithPassword(name, password string) (*ReadCloser, error) {
+	reader, size, files, err := openReader(afero.NewOsFs(), name)
+	if err != nil {
+		return nil, err
+	}
+
 	r := new(ReadCloser)
 	r.p = password
 
 	if err := r.init(reader, size); err != nil {
+		errs := make([]error, 0, len(files)+1)
+		errs = append(errs, err)
+
 		for _, file := range files {
-			err = multierror.Append(err, file.Close())
+			errs = append(errs, file.Close())
 		}
 
-		return nil, fmt.Errorf("sevenzip: error initialising: %w", err)
+		return nil, fmt.Errorf("sevenzip: error initialising: %w", errors.Join(errs...))
 	}
 
 	r.f = files
@@ -465,7 +480,7 @@ func (z *Reader) init(r io.ReaderAt, size int64) (err error) {
 		}
 
 		defer func() {
-			err = multierror.Append(err, fr.Close()).ErrorOrNil()
+			err = errors.Join(err, fr.Close())
 		}()
 
 		if header, err = readEncodedHeader(util.ByteReadCloser(fr)); err != nil {
@@ -500,7 +515,7 @@ func (z *Reader) init(r io.ReaderAt, size int64) (err error) {
 			}
 
 			if !fh.isEmptyStream && !fh.isEmptyFile {
-				f.folder, _ = header.streamsInfo.FileFolderAndSize(j)
+				f.folder, _, _ = header.streamsInfo.FileFolderAndSize(j)
 
 				// Make an exported copy of the folder index
 				f.Stream = f.folder
@@ -551,11 +566,14 @@ func (rc *ReadCloser) Volumes() []string {
 }
 
 // Close closes the 7-zip file or volumes, rendering them unusable for I/O.
-func (rc *ReadCloser) Close() (err error) {
+func (rc *ReadCloser) Close() error {
+	errs := make([]error, 0, len(rc.f))
+
 	for _, f := range rc.f {
-		err = multierror.Append(err, f.Close()).ErrorOrNil()
+		errs = append(errs, f.Close())
 	}
 
+	err := errors.Join(errs...)
 	if err != nil {
 		err = fmt.Errorf("sevenzip: error closing: %w", err)
 	}
@@ -571,8 +589,8 @@ type fileListEntry struct {
 }
 
 type fileInfoDirEntry interface {
-	fs.FileInfo
-	fs.DirEntry
+	iofs.FileInfo
+	iofs.DirEntry
 }
 
 func (e *fileListEntry) stat() (fileInfoDirEntry, error) {
@@ -593,11 +611,11 @@ func (e *fileListEntry) Name() string {
 	return elem
 }
 
-func (e *fileListEntry) Size() int64       { return 0 }
-func (e *fileListEntry) Mode() fs.FileMode { return fs.ModeDir | 0o555 }
-func (e *fileListEntry) Type() fs.FileMode { return fs.ModeDir }
-func (e *fileListEntry) IsDir() bool       { return true }
-func (e *fileListEntry) Sys() interface{}  { return nil }
+func (e *fileListEntry) Size() int64         { return 0 }
+func (e *fileListEntry) Mode() iofs.FileMode { return iofs.ModeDir | 0o555 }
+func (e *fileListEntry) Type() iofs.FileMode { return iofs.ModeDir }
+func (e *fileListEntry) IsDir() bool         { return true }
+func (e *fileListEntry) Sys() interface{}    { return nil }
 
 func (e *fileListEntry) ModTime() time.Time {
 	if e.file == nil {
@@ -607,7 +625,7 @@ func (e *fileListEntry) ModTime() time.Time {
 	return e.file.FileHeader.Modified.UTC()
 }
 
-func (e *fileListEntry) Info() (fs.FileInfo, error) { return e, nil }
+func (e *fileListEntry) Info() (iofs.FileInfo, error) { return e, nil }
 
 func toValidName(name string) string {
 	name = strings.ReplaceAll(name, `\`, `/`)
@@ -697,16 +715,16 @@ func fileEntryLess(x, y string) bool {
 // Open opens the named file in the 7-zip archive, using the semantics of
 // [fs.FS.Open]: paths are always slash separated, with no leading / or ../
 // elements.
-func (z *Reader) Open(name string) (fs.File, error) {
+func (z *Reader) Open(name string) (iofs.File, error) {
 	z.initFileList()
 
-	if !fs.ValidPath(name) {
-		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrInvalid}
+	if !iofs.ValidPath(name) {
+		return nil, &iofs.PathError{Op: "open", Path: name, Err: iofs.ErrInvalid}
 	}
 
 	e := z.openLookup(name)
 	if e == nil {
-		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
+		return nil, &iofs.PathError{Op: "open", Path: name, Err: iofs.ErrNotExist}
 	}
 
 	if e.isDir {
@@ -718,7 +736,7 @@ func (z *Reader) Open(name string) (fs.File, error) {
 		return nil, err
 	}
 
-	return rc.(fs.File), nil //nolint:forcetypeassert
+	return rc.(iofs.File), nil //nolint:forcetypeassert
 }
 
 func split(name string) (dir, elem string) {
@@ -789,16 +807,16 @@ type openDir struct {
 	offset int
 }
 
-func (d *openDir) Close() error               { return nil }
-func (d *openDir) Stat() (fs.FileInfo, error) { return d.e.stat() }
+func (d *openDir) Close() error                 { return nil }
+func (d *openDir) Stat() (iofs.FileInfo, error) { return d.e.stat() }
 
 var errIsDirectory = errors.New("is a directory")
 
 func (d *openDir) Read([]byte) (int, error) {
-	return 0, &fs.PathError{Op: "read", Path: d.e.name, Err: errIsDirectory}
+	return 0, &iofs.PathError{Op: "read", Path: d.e.name, Err: errIsDirectory}
 }
 
-func (d *openDir) ReadDir(count int) ([]fs.DirEntry, error) {
+func (d *openDir) ReadDir(count int) ([]iofs.DirEntry, error) {
 	n := len(d.files) - d.offset
 	if count > 0 && n > count {
 		n = count
@@ -812,7 +830,7 @@ func (d *openDir) ReadDir(count int) ([]fs.DirEntry, error) {
 		return nil, io.EOF
 	}
 
-	list := make([]fs.DirEntry, n)
+	list := make([]iofs.DirEntry, n)
 	for i := range list {
 		s, err := d.files[d.offset+i].stat()
 		if err != nil {

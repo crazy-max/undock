@@ -1,7 +1,7 @@
 <!--
 SPDX-FileCopyrightText: 2024 Shun Sakai
 
-SPDX-License-Identifier: Apache-2.0 OR MIT
+SPDX-License-Identifier: CC-BY-4.0
 -->
 
 # lzip-go
@@ -22,10 +22,6 @@ To install this package:
 ```sh
 go get -u github.com/sorairolake/lzip-go
 ```
-
-### Example
-
-Please see [`example_test.go`].
 
 ### Documentation
 
@@ -74,6 +70,11 @@ Please see [`glzip(1)`].
 
 This package requires the minimum version of Go 1.22.
 
+## Source code
+
+The upstream repository is available at
+<https://github.com/sorairolake/lzip-go.git>.
+
 ## Changelog
 
 Please see [CHANGELOG.adoc].
@@ -91,12 +92,12 @@ decode LZMA streams.
 
 ## License
 
-Copyright &copy; 2024 Shun Sakai (see [AUTHORS.adoc])
+Copyright (C) 2024 Shun Sakai (see [AUTHORS.adoc])
 
 This package is distributed under the terms of either the _Apache License 2.0_
 or the _MIT License_.
 
-This project is compliant with version 3.2 of the [_REUSE Specification_]. See
+This project is compliant with version 3.3 of the [_REUSE Specification_]. See
 copyright notices of individual files for more details on copyright and
 licensing information.
 
@@ -107,7 +108,6 @@ licensing information.
 [go-version-badge]: https://img.shields.io/github/go-mod/go-version/sorairolake/lzip-go?style=for-the-badge&logo=go
 [lzip compressed format]: https://www.nongnu.org/lzip/manual/lzip_manual.html#File-format
 [Go]: https://go.dev/
-[`example_test.go`]: example_test.go
 [release page]: https://github.com/sorairolake/lzip-go/releases
 [Asciidoctor]: https://asciidoctor.org/
 [`glzip(1)`]: docs/man/man1/glzip.1.adoc
@@ -116,4 +116,4 @@ licensing information.
 [`compress/gzip`]: https://pkg.go.dev/compress/gzip
 [`github.com/ulikunitz/xz/lzma`]: https://pkg.go.dev/github.com/ulikunitz/xz/lzma
 [AUTHORS.adoc]: AUTHORS.adoc
-[_REUSE Specification_]: https://reuse.software/spec/
+[_REUSE Specification_]: https://reuse.software/spec-3.3/

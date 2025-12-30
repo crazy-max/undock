@@ -1,6 +1,7 @@
 package rardecode
 
 import (
+	"bytes"
 	"encoding/binary"
 	"hash/crc32"
 	"io"
@@ -386,7 +387,7 @@ func getV3Filter(code []byte) (v3Filter, error) {
 
 	// create new vm filter
 	f := new(vmFilter)
-	r := newRarBitReader(newBufByteReader(code[1:])) // skip first xor byte check
+	r := newRarBitReader(bytes.NewReader(code[1:])) // skip first xor byte check
 
 	// read static data
 	n, err := r.readBits(1)
@@ -400,7 +401,7 @@ func getV3Filter(code []byte) (v3Filter, error) {
 			return nil, err
 		}
 		f.static = make([]byte, m+1)
-		err = r.readFull(f.static)
+		_, err = io.ReadFull(r, f.static)
 		if err != nil {
 			return nil, err
 		}

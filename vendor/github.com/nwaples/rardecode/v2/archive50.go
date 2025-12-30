@@ -8,8 +8,8 @@ import (
 	"hash"
 	"hash/crc32"
 	"io"
-	"math"
 	"math/bits"
+	"slices"
 	"time"
 )
 
@@ -35,6 +35,7 @@ const (
 
 	// main archive block flags
 	arc5MultiVol = 0x0001
+	arc5VolNum   = 0x0002
 	arc5Solid    = 0x0004
 
 	// file block flags
@@ -76,6 +77,8 @@ var (
 	ErrUnknownEncryptMethod = errors.New("rardecode: unknown encryption method")
 	ErrPlatformIntSize      = errors.New("rardecode: platform integer size too small")
 	ErrDictionaryTooLarge   = errors.New("rardecode: decode dictionary too large")
+	ErrBadVolumeNumber      = errors.New("rardecode: bad volume number")
+	ErrNoArchiveBlock       = errors.New("rardecode: missing archive block")
 )
 
 type extra struct {
@@ -106,7 +109,7 @@ func newLittleEndianCRC32() hash.Hash {
 	return leHash32{crc32.NewIEEE()}
 }
 
-// archive50 implements fileBlockReader for RAR 5 file format archives
+// archive50 implements archiveBlockReader for RAR 5 file format archives
 type archive50 struct {
 	pass     []byte
 	blockKey []byte                // key used to encrypt blocks
@@ -119,10 +122,8 @@ type archive50 struct {
 	}
 }
 
-func (a *archive50) clone() fileBlockReader {
-	na := new(archive50)
-	*na = *a
-	return na
+func (a *archive50) useOldNaming() bool {
+	return false
 }
 
 // calcKeys50 calculates the keys used in RAR 5 archive processing.
@@ -144,7 +145,7 @@ func calcKeys50(pass, salt []byte, kdfCount int) [][]byte {
 	_, _ = prf.Write([]byte{0, 0, 0, 1})
 
 	t := prf.Sum(nil)
-	u := append([]byte(nil), t...)
+	u := slices.Clone(t)
 
 	kdfCount--
 
@@ -158,7 +159,7 @@ func calcKeys50(pass, salt []byte, kdfCount int) [][]byte {
 			}
 			iter--
 		}
-		keys[i] = append([]byte(nil), t...)
+		keys[i] = slices.Clone(t)
 	}
 
 	pwcheck := keys[2]
@@ -198,7 +199,7 @@ func (a *archive50) getKeys(kdfCount int, salt, check []byte) ([][]byte, error) 
 		// store in cache
 		copy(a.keyCache[1:], a.keyCache[:])
 		a.keyCache[0].kdfCount = kdfCount
-		a.keyCache[0].salt = append([]byte(nil), salt...)
+		a.keyCache[0].salt = slices.Clone(salt)
 		a.keyCache[0].keys = keys
 	}
 
@@ -220,36 +221,29 @@ func (a *archive50) parseFileEncryptionRecord(b readBuf, f *fileBlockHeader) err
 		return ErrCorruptEncryptData
 	}
 	kdfCount := int(b.byte())
-	salt := append([]byte(nil), b.bytes(16)...)
-	f.iv = append([]byte(nil), b.bytes(16)...)
+	salt := slices.Clone(b.bytes(16))
+	f.iv = slices.Clone(b.bytes(16))
 
 	var check []byte
 	if flags&file5EncCheckPresent > 0 {
 		if len(b) < 12 {
 			return ErrCorruptEncryptData
 		}
-		check = append([]byte(nil), b.bytes(12)...)
+		check = slices.Clone(b.bytes(12))
 	}
 	useMac := flags&file5EncUseMac > 0
 	// only need to generate keys for first block or
 	// last block if it has an optional hash key
-	if !(f.first || (f.last && useMac)) {
+	if a.pass == nil || !(f.first || (f.last && useMac)) {
 		return nil
 	}
-	f.genKeys = func() error {
-		if a.pass == nil {
-			return ErrArchivedFileEncrypted
-		}
-		keys, err := a.getKeys(kdfCount, salt, check)
-		if err != nil {
-			return err
-		}
-
-		f.key = keys[0]
-		if useMac {
-			f.hashKey = keys[1]
-		}
-		return nil
+	keys, err := a.getKeys(kdfCount, salt, check)
+	if err != nil {
+		return err
+	}
+	f.key = keys[0]
+	if useMac {
+		f.hashKey = keys[1]
 	}
 	return nil
 }
@@ -367,7 +361,7 @@ func (a *archive50) parseFileHeader(h *blockHeader50) (*fileBlockHeader, error) 
 		if len(h.data) < 4 {
 			return nil, ErrCorruptFileHeader
 		}
-		f.sum = append([]byte(nil), h.data.bytes(4)...)
+		f.sum = slices.Clone(h.data.bytes(4))
 		if f.first {
 			f.hash = newLittleEndianCRC32
 		}
@@ -379,28 +373,21 @@ func (a *archive50) parseFileHeader(h *blockHeader50) (*fileBlockHeader, error) 
 	method := (flags >> 7) & 7 // compression method (0 == none)
 	if f.first && method != 0 {
 		unpackver := flags & file5CompAlgorithm
-		var winSize int64
-		if unpackver == 0 {
+		switch unpackver {
+		case 0:
 			f.decVer = decode50Ver
-			winSize = 0x20000 << ((flags >> 10) & 0x0F)
-		} else if unpackver == 1 {
+			f.winSize = 0x20000 << ((flags >> 10) & 0x0F)
+		case 1:
 			if flags&file5CompV5Compat > 0 {
 				f.decVer = decode50Ver
 			} else {
 				f.decVer = decode70Ver
 			}
-			winSize = 0x20000 << ((flags >> 10) & 0x1F)
-			winSize += winSize / 32 * int64((flags>>15)&0x1F)
-			if winSize > maxDictSize {
-				return nil, ErrDictionaryTooLarge
-			}
-		} else {
+			f.winSize = 0x20000 << ((flags >> 10) & 0x1F)
+			f.winSize += f.winSize / 32 * int64((flags>>15)&0x1F)
+		default:
 			return nil, ErrUnknownDecoder
 		}
-		if winSize > math.MaxInt {
-			return nil, ErrPlatformIntSize
-		}
-		f.winSize = int(winSize)
 	}
 	switch h.data.uvarint() {
 	case 0:
@@ -472,39 +459,58 @@ func (a *archive50) parseEncryptionBlock(b readBuf) error {
 	return nil
 }
 
-func (a *archive50) readBlockHeader(r sliceReader) (*blockHeader50, error) {
+func (a *archive50) parseArcBlock(h *blockHeader50) int {
+	flags := h.data.uvarint()
+	a.multi = flags&arc5MultiVol > 0
+	a.solid = flags&arc5Solid > 0
+	if flags&arc5VolNum > 0 {
+		return int(h.data.uvarint())
+	}
+	return -1
+}
+
+func (a *archive50) readBlockHeader(r byteReader) (*blockHeader50, error) {
 	if a.blockKey != nil {
 		// block is encrypted
-		iv, err := r.readSlice(16)
+		if a.pass == nil {
+			return nil, ErrArchiveEncrypted
+		}
+		iv := make([]byte, 16)
+		_, err := io.ReadFull(r, iv)
 		if err != nil {
 			return nil, err
 		}
-		r = newAesSliceReader(r, a.blockKey, iv)
+		r, err = newAesDecryptReader(r, a.blockKey, iv)
+		if err != nil {
+			return nil, err
+		}
 	}
-	var b readBuf
-	var err error
-	// peek to find the header size
-	b, err = r.peek(7)
+	// find the header size
+	sizeBuf := make([]byte, 7)
+	_, err := io.ReadFull(r, sizeBuf)
 	if err != nil {
 		return nil, err
 	}
+	b := readBuf(sizeBuf)
 	crc := b.uint32()
-
-	hash := crc32.NewIEEE()
-
+	// TODO: check size is valid
 	size := int(b.uvarint()) // header size
-	b, err = r.readSlice(7 - len(b) + size)
+
+	buf := make([]byte, 3+size-len(b))
+	copy(buf, sizeBuf[4:])
+	_, err = io.ReadFull(r, buf[3:])
 	if err != nil {
 		return nil, err
 	}
 
 	// check header crc
-	_, _ = hash.Write(b[4:])
+	hash := crc32.NewIEEE()
+	_, _ = hash.Write(buf)
 	if crc != hash.Sum32() {
 		return nil, ErrBadHeaderCRC
 	}
 
-	b = b[len(b)-size:]
+	b = buf[3-len(b):]
 	h := new(blockHeader50)
 	h.htype = b.uvarint()
 	h.flags = b.uvarint()
@@ -535,47 +541,72 @@ func (a *archive50) readBlockHeader(r sliceReader) (*blockHeader50, error) {
 	return h, nil
 }
 
-// next advances to the next file block in the archive
-func (a *archive50) next(v *volume) (*fileBlockHeader, error) {
+func (a *archive50) mustReadBlockHeader(r byteReader) (*blockHeader50, error) {
+	h, err := a.readBlockHeader(r)
+	if err != nil {
+		if err == io.EOF {
+			err = io.ErrUnexpectedEOF
+		}
+		return nil, err
+	}
+	return h, nil
+}
+
+func (a *archive50) init(br *bufVolumeReader) (int, error) {
+	a.blockKey = nil // reset encryption when opening new volume file
+	volnum := -1
+	h, err := a.mustReadBlockHeader(br)
+	if err != nil {
+		return volnum, err
+	}
+	if h.htype == block5Encrypt {
+		err = a.parseEncryptionBlock(h.data)
+		if err != nil {
+			return volnum, err
+		}
+		h, err = a.mustReadBlockHeader(br)
+		if err != nil {
+			return volnum, err
+		}
+	}
+	if h.htype != block5Arc {
+		return volnum, ErrNoArchiveBlock
+	}
+	volnum = a.parseArcBlock(h)
+	return volnum, nil
+}
+
+// nextBlock advances to the next file block in the archive
+func (a *archive50) nextBlock(br *bufVolumeReader) (*fileBlockHeader, error) {
 	for {
 		// get next block header
-		h, err := a.readBlockHeader(v)
+		h, err := a.mustReadBlockHeader(br)
 		if err != nil {
-			if err == io.EOF {
-				err = io.ErrUnexpectedEOF
-			}
 			return nil, err
 		}
 		switch h.htype {
 		case block5File:
 			return a.parseFileHeader(h)
-		case block5Arc:
-			flags := h.data.uvarint()
-			a.multi = flags&arc5MultiVol > 0
-			a.solid = flags&arc5Solid > 0
-		case block5Encrypt:
-			err = a.parseEncryptionBlock(h.data)
 		case block5End:
 			flags := h.data.uvarint()
 			if flags&endArc5NotLast == 0 || !a.multi {
 				return nil, io.EOF
 			}
-			a.blockKey = nil // reset encryption when opening new volume file
-			err = v.next()
+			return nil, ErrMultiVolume
 		default:
 			if h.dataSize > 0 {
-				err = v.discard(h.dataSize) // skip over block data
+				err = br.Discard(h.dataSize) // skip over block data
+				if err != nil {
+					return nil, err
+				}
 			}
-		}
-		if err != nil {
-			return nil, err
 		}
 	}
 }
 
-// newArchive50 creates a new fileBlockReader for a Version 5 archive.
+// newArchive50 creates a new archiveBlockReader for a Version 5 archive.
 func newArchive50(password *string) *archive50 {
-	a := new(archive50)
+	a := &archive50{}
 	if password != nil {
 		a.pass = []byte(*password)
 	}

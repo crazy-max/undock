@@ -1,5 +1,7 @@
 package rardecode
 
+import "io"
+
 const (
 	mainSize      = 299
 	offsetSize    = 60
@@ -102,7 +104,7 @@ func (d *lz29Decoder) readFilterData() (b []byte, err error) {
 
 	buf := make([]byte, n+1)
 	buf[0] = byte(flags)
-	err = d.br.readFull(buf[1:])
+	_, err = io.ReadFull(d.br, buf[1:])
 
 	return buf, err
 }
