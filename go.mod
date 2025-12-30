@@ -5,7 +5,7 @@ go 1.24.0
 require (
 	github.com/alecthomas/kong v1.13.0
 	github.com/containerd/platforms v0.2.1
-	github.com/containers/image/v5 v5.36.1
+	github.com/containers/image/v5 v5.36.2
 	github.com/docker/docker v28.5.1+incompatible
 	github.com/mholt/archives v0.1.1
 	github.com/opencontainers/go-digest v1.0.0
