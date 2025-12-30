@@ -202,7 +202,7 @@ outer:
 		return 0, err
 	}
 	defer func() {
-		if err2 := rlstore.Delete(clayer.ID); err2 != nil {
+		if err2 := rlstore.deleteWhileHoldingLock(clayer.ID); err2 != nil {
 			if retErr == nil {
 				retErr = fmt.Errorf("deleting temporary layer %#v: %w", clayer.ID, err2)
 			} else {
@@ -276,10 +276,7 @@ func (s *store) getAutoUserNS(options *types.AutoUserNsOptions, image *Image, rl
 	// bigger than s.autoNsMaxSize.
 	// This is a best effort heuristic.
 	if requestedSize == 0 {
-		size = initialSize
-		if s.autoNsMinSize > size {
-			size = s.autoNsMinSize
-		}
+		size = max(s.autoNsMinSize, initialSize)
 		if image != nil {
 			sizeFromImage, err := s.getMaxSizeFromImage(image, rlstore, lstores, options.PasswdFile, options.GroupFile)
 			if err != nil {

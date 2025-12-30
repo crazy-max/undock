@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/containers/image/v5/internal/imagedestination"
 	"github.com/containers/image/v5/internal/imagedestination/impl"
@@ -14,6 +15,7 @@ import (
 	"github.com/containers/storage/pkg/archive"
 	"github.com/containers/storage/pkg/idtools"
 	digest "github.com/opencontainers/go-digest"
+	imgspecv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/sirupsen/logrus"
 )
 
@@ -103,6 +105,14 @@ func (d *ociArchiveImageDestination) SupportsPutBlobPartial() bool {
 	return d.unpackedDest.SupportsPutBlobPartial()
 }
 
+// NoteOriginalOCIConfig provides the config of the image, as it exists on the source, BUT converted to OCI format,
+// or an error obtaining that value (e.g. if the image is an artifact and not a container image).
+// The destination can use it in its TryReusingBlob/PutBlob implementations
+// (otherwise it only obtains the final config after all layers are written).
+func (d *ociArchiveImageDestination) NoteOriginalOCIConfig(ociConfig *imgspecv1.Image, configErr error) error {
+	return d.unpackedDest.NoteOriginalOCIConfig(ociConfig, configErr)
+}
+
 // PutBlobWithOptions writes contents of stream and returns data representing the result.
 // inputInfo.Digest can be optionally provided if known; if provided, and stream is read to the end without error, the digest MUST match the stream contents.
 // inputInfo.Size is the expected length of stream, if known.
@@ -163,16 +173,19 @@ func (d *ociArchiveImageDestination) CommitWithOptions(ctx context.Context, opti
 	src := d.tempDirRef.tempDirectory
 	// path to save tarred up file
 	dst := d.ref.resolvedFile
-	return tarDirectory(src, dst)
+	return tarDirectory(src, dst, options.Timestamp)
 }
 
 // tar converts the directory at src and saves it to dst
-func tarDirectory(src, dst string) error {
+// if contentModTimes is non-nil, tar header entries times are set to this
+func tarDirectory(src, dst string, contentModTimes *time.Time) (retErr error) {
 	// input is a stream of bytes from the archive of the directory at path
 	input, err := archive.TarWithOptions(src, &archive.TarOptions{
 		Compression: archive.Uncompressed,
 		// Don’t include the data about the user account this code is running under.
 		ChownOpts: &idtools.IDPair{UID: 0, GID: 0},
+		// override tar header timestamps
+		Timestamp: contentModTimes,
 	})
 	if err != nil {
 		return fmt.Errorf("retrieving stream of bytes from %q: %w", src, err)
@@ -184,7 +197,14 @@ func tarDirectory(src, dst string) error {
 	if err != nil {
 		return fmt.Errorf("creating tar file %q: %w", dst, err)
 	}
-	defer outFile.Close()
+
+	// since we are writing to this file, make sure we handle errors
+	defer func() {
+		closeErr := outFile.Close()
+		if retErr == nil {
+			retErr = closeErr
+		}
+	}()
 
 	// copies the contents of the directory to the tar file
 	// TODO: This can take quite some time, and should ideally be cancellable using a context.Context.
