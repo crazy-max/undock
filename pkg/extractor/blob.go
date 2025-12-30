@@ -63,7 +63,7 @@ func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 			return nil
 		}
 
-		if f.FileInfo.IsDir() {
+		if f.IsDir() {
 			opts.Logger.Trace().Msgf("Extracting %s", f.NameInArchive)
 		} else {
 			opts.Logger.Debug().Msgf("Extracting %s", f.NameInArchive)
@@ -75,14 +75,14 @@ func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 		}
 
 		switch {
-		case f.FileInfo.IsDir():
+		case f.IsDir():
 			return os.MkdirAll(path, f.Mode())
-		case f.FileInfo.Mode().IsRegular():
+		case f.Mode().IsRegular():
 			return writeFile(ctx, path, f)
-		case f.FileInfo.Mode()&fs.ModeSymlink != 0:
+		case f.Mode()&fs.ModeSymlink != 0:
 			return writeSymlink(ctx, path, f)
 		default:
-			return errors.Errorf("cannot handle file mode: %v", f.FileInfo.Mode())
+			return errors.Errorf("cannot handle file mode: %v", f.Mode())
 		}
 	})
 }
