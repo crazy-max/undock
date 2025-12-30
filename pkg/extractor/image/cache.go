@@ -59,7 +59,7 @@ func (c *Client) cacheSource(src string) ([]byte, string, error) {
 		if err != nil {
 			return nil, "", err
 		}
-		if img, err := dcli.ImageInspectWithRaw(strings.TrimPrefix(src, "docker-daemon://")); err == nil {
+		if img, err := dcli.ImageInspect(strings.TrimPrefix(src, "docker-daemon://")); err == nil {
 			cacheDigest = srcObj.Scheme() + "-" + strings.TrimPrefix(img.ID, "sha256:")
 		} else {
 			return nil, "", err
