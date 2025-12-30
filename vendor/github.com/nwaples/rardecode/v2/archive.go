@@ -11,6 +11,9 @@ const (
 	decode29Ver
 	decode50Ver
 	decode70Ver
+
+	archiveVersion15 = 0
+	archiveVersion50 = 1
 )
 
 var (
@@ -21,6 +24,8 @@ var (
 	ErrDecoderOutOfData      = errors.New("rardecode: decoder expected more data than is in packed file")
 	ErrArchiveEncrypted      = errors.New("rardecode: archive encrypted, password required")
 	ErrArchivedFileEncrypted = errors.New("rardecode: archived files encrypted, password required")
+	ErrMultiVolume           = errors.New("rardecode: multi-volume archive continues in next file")
+	errVolumeOrArchiveEnd    = errors.New("rardecode: archive or volume end")
 )
 
 type readBuf []byte
@@ -73,58 +78,30 @@ func (b *readBuf) uvarint() uint64 {
 	return 0
 }
 
-// sliceReader implements the readSlice and peek functions.
-// The slices returned are only valid till the next readSlice or peek call.
-// If n bytes arent available no slice will be returned with the error value set.
-// The error is io.EOF only of 0 bytes were found, otherwise io.ErrUnexpectedEOF
-// will be returned on a short read.
-// The capacity of the slice returned by readSlice must reflect how much data was read
-// to return the n bytes (eg. an encrypted reader has to decrypt in multiples of a
-// block size so may need to read more than n bytes).
-type sliceReader interface {
-	readSlice(n int) ([]byte, error) // return the next n bytes
-	peek(n int) ([]byte, error)      // return the next n bytes withough advancing reader
-}
-
 // fileBlockHeader represents a file block in a RAR archive.
 // Files may comprise one or more file blocks.
 // Solid files retain decode tables and dictionary from previous solid files in the archive.
 type fileBlockHeader struct {
-	first    bool             // first block in file
-	last     bool             // last block in file
-	arcSolid bool             // archive is solid
-	winSize  int              // decode window size
-	hash     func() hash.Hash // hash used for file checksum
-	hashKey  []byte           // optional hmac key to be used calculate file checksum
-	sum      []byte           // expected checksum for file contents
-	decVer   int              // decoder to use for file
-	key      []byte           // key for AES, non-empty if file encrypted
-	iv       []byte           // iv for AES, non-empty if file encrypted
-	genKeys  func() error     // generates key & iv fields
+	first     bool             // first block in file
+	last      bool             // last block in file
+	arcSolid  bool             // archive is solid
+	dataOff   int64            // offset to data for file block in archive volume
+	packedOff int64            // offset to data in packed file
+	blocknum  int              // number for current block in file
+	volnum    int              // archive volume number
+	winSize   int64            // decode window size
+	hash      func() hash.Hash // hash used for file checksum
+	hashKey   []byte           // optional hmac key to be used calculate file checksum
+	sum       []byte           // expected checksum for file contents
+	decVer    int              // decoder to use for file
+	key       []byte           // key for AES, non-empty if file encrypted
+	iv        []byte           // iv for AES, non-empty if file encrypted
 	FileHeader
 }
 
-// fileBlockReader returns the next fileBlockHeader in a volume.
-type fileBlockReader interface {
-	next(v *volume) (*fileBlockHeader, error) // reads the volume and returns the next fileBlockHeader
-	clone() fileBlockReader                   // makes a copy of the fileBlockReader
-}
-
-func newFileBlockReader(v *volume) (fileBlockReader, error) {
-	pass := v.opt.pass
-	if pass != nil {
-		runes := []rune(*pass)
-		if len(runes) > maxPassword {
-			pw := string(runes[:maxPassword])
-			pass = &pw
-		}
-	}
-	switch v.ver {
-	case 0:
-		return newArchive15(pass), nil
-	case 1:
-		return newArchive50(pass), nil
-	default:
-		return nil, ErrUnknownVersion
-	}
+// archiveBlockReader returns the next fileBlockHeader in an archive volume.
+type archiveBlockReader interface {
+	init(br *bufVolumeReader) (int, error)                   // init volume and returns optional (>=0) volume number
+	nextBlock(br *bufVolumeReader) (*fileBlockHeader, error) // reads the volume and returns the next fileBlockHeader
+	useOldNaming() bool
 }

@@ -1,6 +1,9 @@
 package rardecode
 
-import "errors"
+import (
+	"errors"
+	"io"
+)
 
 const (
 	minWindowSize    = 0x40000
@@ -33,13 +36,14 @@ type decoder interface {
 
 // decodeReader implements io.Reader for decoding compressed data in RAR archives.
 type decodeReader struct {
+	archiveFile
 	tot    int64          // total bytes read from window
 	outbuf []byte         // buffered output
 	buf    []byte         // filter buffer
 	fl     []*filterBlock // list of filters each with offset relative to previous in list
 	dec    decoder        // decoder being used to unpack file
 	err    error          // current decoder error output
-	br     byteReader
+	solid  bool           // archive is solid
 
 	win  []byte // sliding window buffer
 	size int    // win length
@@ -47,14 +51,15 @@ type decodeReader struct {
 	w    int    // index in win for writes (end)
 }
 
-func (d *decodeReader) init(r byteReader, ver int, size int, reset bool, unPackedSize int64) error {
+func (d *decodeReader) init(f archiveFile, ver int, size int, reset, arcSolid bool, unPackedSize int64) error {
 	d.outbuf = nil
 	d.tot = 0
 	d.err = nil
+	d.solid = arcSolid
 	if reset {
 		d.fl = nil
 	}
-	d.br = r
+	d.archiveFile = f
 
 	// initialize window
 	size = max(size, minWindowSize)
@@ -90,7 +95,7 @@ func (d *decodeReader) init(r byteReader, ver int, size int, reset bool, unPacke
 	} else if d.dec.version() != ver {
 		return ErrMultipleDecoders
 	}
-	d.dec.init(r, reset, unPackedSize, ver)
+	d.dec.init(f, reset, unPackedSize, ver)
 	return nil
 }
 
@@ -249,60 +254,85 @@ func (d *decodeReader) processFilters() ([]byte, error) {
 	}
 }
 
-// bytes returns a decoded byte slice or an error.
-func (d *decodeReader) bytes() ([]byte, error) {
+// decode fills the window, processes filters and sets outbuf to the current valid output.
+func (d *decodeReader) decode() error {
 	// fill window if needed
 	if d.w == d.r {
-		if err := d.fill(); err != nil {
-			return nil, err
+		err := d.fill()
+		if err != nil {
+			return err
 		}
 	}
 	n := d.w - d.r
 
 	// return current unread bytes if there are no filters
 	if len(d.fl) == 0 {
-		b := d.win[d.r:d.w]
+		d.outbuf = d.win[d.r:d.w]
 		d.r = d.w
 		d.tot += int64(n)
-		return b, nil
+		return nil
 	}
 
 	// check filters
 	f := d.fl[0]
 	if f.offset < 0 {
-		return nil, ErrInvalidFilter
+		return ErrInvalidFilter
 	}
 	if f.offset > 0 {
 		// filter not at current read index, output bytes before it
 		n = min(f.offset, n)
-		b := d.win[d.r : d.r+n]
+		d.outbuf = d.win[d.r : d.r+n]
 		d.r += n
 		f.offset -= n
 		d.tot += int64(n)
-		return b, nil
+		return nil
 	}
 
 	// process filters at current index
-	b, err := d.processFilters()
-	if cap(b) > cap(d.buf) {
-		// filter returned a larger buffer, cache it
-		d.buf = b
+	var err error
+	d.outbuf, err = d.processFilters()
+	if err != nil {
+		return err
 	}
-
-	d.tot += int64(len(b))
-	return b, err
+	if cap(d.outbuf) > cap(d.buf) {
+		// filter returned a larger buffer, cache it
+		d.buf = d.outbuf
+	}
+	d.tot += int64(len(d.outbuf))
+	return nil
 }
 
 // Read decodes data and stores it in p.
 func (d *decodeReader) Read(p []byte) (int, error) {
-	var err error
 	if len(d.outbuf) == 0 {
-		d.outbuf, err = d.bytes()
+		err := d.decode()
 		if err != nil {
 			return 0, err
 		}
 	}
 	n := copy(p, d.outbuf)
 	d.outbuf = d.outbuf[n:]
-	return n, err
+	return n, nil
+}
+
+func (d *decodeReader) ReadByte() (byte, error) {
+	if len(d.outbuf) == 0 {
+		err := d.decode()
+		if err != nil {
+			return 0, err
+		}
+	}
+	b := d.outbuf[0]
+	d.outbuf = d.outbuf[1:]
+	return b, nil
+}
+
+func (d *decodeReader) nextFile() (*fileBlockList, error) {
+	if d.solid {
+		_, err := io.Copy(io.Discard, d)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return d.archiveFile.nextFile()
 }

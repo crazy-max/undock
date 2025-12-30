@@ -107,8 +107,8 @@ func (z *Writer) Write(p []byte) (int, error) {
 		return n, err
 	}
 
-	z.trailer.crc = crc32.Update(z.trailer.crc, crc32.IEEETable, p)
-	z.trailer.dataSize += uint64(len(p))
+	z.crc = crc32.Update(z.crc, crc32.IEEETable, p)
+	z.dataSize += uint64(len(p))
 
 	return n, nil
 }
@@ -133,8 +133,8 @@ func (z *Writer) Close() error {
 
 	var trailer [trailerSize]byte
 
-	binary.LittleEndian.PutUint32(trailer[:4], z.trailer.crc)
-	binary.LittleEndian.PutUint64(trailer[4:12], z.trailer.dataSize)
+	binary.LittleEndian.PutUint32(trailer[:4], z.crc)
+	binary.LittleEndian.PutUint64(trailer[4:12], z.dataSize)
 	binary.LittleEndian.PutUint64(trailer[12:], headerSize+uint64(len(cb))+trailerSize)
 
 	if memberSize := binary.LittleEndian.Uint64(trailer[12:]); memberSize > MaxMemberSize {
