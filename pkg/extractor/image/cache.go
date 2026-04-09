@@ -94,7 +94,7 @@ func (c *Client) cacheSource(src string) ([]byte, string, error) {
 	}
 	defer policyContext.Destroy() //nolint:errcheck
 
-	manblob, err := copy.Image(c.ctx, policyContext, dstRef, srcRef, &copy.Options{
+	manblob, err := c.copyCachedImage(policyContext, dstRef, srcRef, &copy.Options{
 		ReportWriter:                          &progressWriter{logger: c.logger},
 		SourceCtx:                             srcCtx,
 		DestinationCtx:                        dstCtx,
