@@ -59,20 +59,24 @@ func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 		}
 	}
 
+	createdInLayer := map[string]struct{}{}
+
 	return extractor.Extract(opts.Context, input, func(ctx context.Context, f archives.FileInfo) error {
-		if target, opaque, ok := whiteoutTarget(f.NameInArchive); ok {
+		entryName := normalizeArchivePath(f.NameInArchive)
+
+		if target, opaque, ok := whiteoutTarget(entryName); ok {
 			if !pathIntersects(pathsInArchive, target) {
 				return nil
 			}
 			if opaque {
 				opts.Logger.Debug().Msgf("Applying opaque whiteout %s", f.NameInArchive)
-				return applyOpaqueWhiteout(dest, target)
+				return applyOpaqueWhiteout(dest, target, createdInLayer)
 			}
 			opts.Logger.Debug().Msgf("Applying whiteout %s", f.NameInArchive)
-			return removePath(filepath.Join(dest, filepath.FromSlash(target)))
+			return applyWhiteout(dest, target, createdInLayer)
 		}
 
-		if !fileIsIncluded(pathsInArchive, f.NameInArchive) {
+		if !fileIsIncluded(pathsInArchive, entryName) {
 			return nil
 		}
 
@@ -82,21 +86,27 @@ func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 			opts.Logger.Debug().Msgf("Extracting %s", f.NameInArchive)
 		}
 
-		outPath := filepath.Join(dest, filepath.FromSlash(f.NameInArchive))
+		outPath := filepath.Join(dest, filepath.FromSlash(entryName))
 		if err = os.MkdirAll(filepath.Dir(outPath), 0o700); err != nil {
 			return err
 		}
 
 		switch {
 		case f.IsDir():
-			return os.MkdirAll(outPath, f.Mode())
+			err = os.MkdirAll(outPath, f.Mode())
 		case f.Mode().IsRegular():
-			return writeFile(ctx, outPath, f)
+			err = writeFile(ctx, outPath, f)
 		case f.Mode()&fs.ModeSymlink != 0:
-			return writeSymlink(ctx, outPath, f)
+			err = writeSymlink(ctx, outPath, f)
 		default:
 			return errors.Errorf("cannot handle file mode: %v", f.Mode())
 		}
+
+		if err != nil {
+			return err
+		}
+		createdInLayer[entryName] = struct{}{}
+		return nil
 	})
 }
 
@@ -116,6 +126,14 @@ func fileIsIncluded(filenameList []string, filename string) bool {
 		}
 	}
 	return false
+}
+
+func normalizeArchivePath(filename string) string {
+	filename = strings.TrimPrefix(filename, "/")
+	if filename == "" {
+		return "."
+	}
+	return path.Clean(filename)
 }
 
 func pathIntersects(filenameList []string, filename string) bool {
@@ -150,21 +168,71 @@ func whiteoutTarget(filename string) (target string, opaque bool, ok bool) {
 	}
 }
 
-func applyOpaqueWhiteout(dest string, target string) error {
+func applyOpaqueWhiteout(dest string, target string, createdInLayer map[string]struct{}) error {
+	return removePathPreservingCurrentLayer(dest, target, createdInLayer, false)
+}
+
+func applyWhiteout(dest string, target string, createdInLayer map[string]struct{}) error {
+	return removePathPreservingCurrentLayer(dest, target, createdInLayer, true)
+}
+
+func removePathPreservingCurrentLayer(dest string, target string, createdInLayer map[string]struct{}, removeSelf bool) error {
 	targetPath := filepath.Join(dest, filepath.FromSlash(target))
-	entries, err := os.ReadDir(targetPath)
+	info, err := os.Lstat(targetPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
 		}
 		return err
 	}
+
+	protectSelf, protectedChildren := protectedPathsInCurrentLayer(createdInLayer, target)
+
+	if !info.IsDir() {
+		if protectSelf {
+			return nil
+		}
+		return removePath(targetPath)
+	}
+
+	if removeSelf && !protectSelf && len(protectedChildren) == 0 {
+		return removePath(targetPath)
+	}
+
+	entries, err := os.ReadDir(targetPath)
+	if err != nil {
+		return err
+	}
 	for _, entry := range entries {
+		if _, ok := protectedChildren[entry.Name()]; ok {
+			continue
+		}
 		if err := removePath(filepath.Join(targetPath, entry.Name())); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func protectedPathsInCurrentLayer(createdInLayer map[string]struct{}, target string) (bool, map[string]struct{}) {
+	protectedChildren := make(map[string]struct{})
+	targetPrefix := strings.TrimSuffix(target, "/") + "/"
+	var protectSelf bool
+
+	for created := range createdInLayer {
+		switch {
+		case created == target:
+			protectSelf = true
+		case strings.HasPrefix(created, targetPrefix):
+			rest := strings.TrimPrefix(created, targetPrefix)
+			child, _, _ := strings.Cut(rest, "/")
+			if child != "" {
+				protectedChildren[child] = struct{}{}
+			}
+		}
+	}
+
+	return protectSelf, protectedChildren
 }
 
 func removePath(path string) error {

@@ -94,6 +94,60 @@ func TestExtractBlobAppliesOpaqueWhiteoutForIncludedDescendant(t *testing.T) {
 	require.NoDirExists(t, filepath.Join(dest, "dir", "sub"))
 }
 
+func TestExtractBlobKeepsSameLayerFilesWhenOpaqueWhiteoutComesLater(t *testing.T) {
+	root := t.TempDir()
+	dest := filepath.Join(root, "dist")
+
+	layer1 := filepath.Join(root, "layer1.tar")
+	writeTarFile(t, layer1, []tarEntry{
+		{name: "dir/lower.txt", body: "lower"},
+	})
+
+	layer2 := filepath.Join(root, "layer2.tar")
+	writeTarFile(t, layer2, []tarEntry{
+		{name: "dir/keep.txt", body: "keep"},
+		{name: "dir/.wh..wh..opq"},
+	})
+
+	opts := ExtractBlobOpts{
+		Context: context.Background(),
+		Logger:  zerolog.New(io.Discard),
+	}
+
+	require.NoError(t, ExtractBlob(layer1, dest, opts))
+	require.NoError(t, ExtractBlob(layer2, dest, opts))
+
+	require.NoFileExists(t, filepath.Join(dest, "dir", "lower.txt"))
+	require.FileExists(t, filepath.Join(dest, "dir", "keep.txt"))
+}
+
+func TestExtractBlobKeepsSameLayerFilesWhenWhiteoutComesLater(t *testing.T) {
+	root := t.TempDir()
+	dest := filepath.Join(root, "dist")
+
+	layer1 := filepath.Join(root, "layer1.tar")
+	writeTarFile(t, layer1, []tarEntry{
+		{name: "dir/sub/lower.txt", body: "lower"},
+	})
+
+	layer2 := filepath.Join(root, "layer2.tar")
+	writeTarFile(t, layer2, []tarEntry{
+		{name: "dir/sub/keep.txt", body: "keep"},
+		{name: "dir/.wh.sub"},
+	})
+
+	opts := ExtractBlobOpts{
+		Context: context.Background(),
+		Logger:  zerolog.New(io.Discard),
+	}
+
+	require.NoError(t, ExtractBlob(layer1, dest, opts))
+	require.NoError(t, ExtractBlob(layer2, dest, opts))
+
+	require.NoFileExists(t, filepath.Join(dest, "dir", "sub", "lower.txt"))
+	require.FileExists(t, filepath.Join(dest, "dir", "sub", "keep.txt"))
+}
+
 type tarEntry struct {
 	name string
 	body string
