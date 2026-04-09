@@ -11,6 +11,7 @@ on:
   push:
     branches:
       - 'main'
+    tags:
       - 'v*'
   pull_request:
 
@@ -18,34 +19,22 @@ env:
   DESTDIR: ./bin
 
 jobs:
-  registry:
+  build:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          -
-            image: "dockereng/packaging:buildx-v0.11.1"
-            all: "true"
-            loglevel: "debug"
-          -
-            image: "dockereng/packaging:buildx-v0.11.1"
-            all: "true"
-            wrap: "true"
-            loglevel: "debug"
-          -
-            image: "crazymax/diun:4.20.1"
-            all: "true"
-            include: "/usr/local/bin"
-            loglevel: "info"
-          -
-            image: "crazymax/diun:latest@sha256:3fca3dd86c2710586208b0f92d1ec4ce25382f4cad4ae76a2275db8e8bb24031"
-            include: "/usr/local/bin"
-            loglevel: "debug"
+        platform:
+          - darwin/amd64
+          - darwin/arm64
+          - linux/amd64
+          - linux/arm64
+          - windows/amd64
     steps:
-      -
-        name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Prepare
+        run: |
+          platform=${{ matrix.platform }}
+          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
       -
         name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
@@ -53,10 +42,84 @@ jobs:
         name: Build
         uses: docker/bake-action@82490499d2e5613fcead7e128237ef0b0ea210f7 # v7.0.0
         with:
-          source: .
           targets: binary
+          set: |
+            *.platform=${{ matrix.platform }}
+      -
+        name: Upload artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: undock-${{ env.PLATFORM_PAIR }}
+          path: ${{ env.DESTDIR }}
+          if-no-files-found: error
+
+  prepare-registry:
+    runs-on: ubuntu-latest
+    outputs:
+      includes: ${{ steps.set.outputs.includes }}
+    steps:
+      -
+        name: Create includes
+        id: set
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const platforms = [
+              { platform: 'darwin-amd64', runner: 'macos-26-intel' },
+              { platform: 'darwin-arm64', runner: 'macos-26' },
+              { platform: 'linux-amd64', runner: 'ubuntu-latest' },
+              { platform: 'linux-arm64', runner: 'ubuntu-24.04-arm' },
+              { platform: 'windows-amd64', runner: 'windows-latest' }
+            ];
+            const tests = [
+              { image: 'dockereng/packaging:buildx-v0.11.1', all: 'true', loglevel: 'debug' },
+              { image: 'dockereng/packaging:buildx-v0.11.1', all: 'true', wrap: 'true', loglevel: 'debug' },
+              { image: 'crazymax/diun:4.20.1', all: 'true', include: '/usr/local/bin', loglevel: 'info' },
+              { image: 'crazymax/diun:latest@sha256:3fca3dd86c2710586208b0f92d1ec4ce25382f4cad4ae76a2275db8e8bb24031', include: '/usr/local/bin', loglevel: 'debug' }
+            ];
+            const includes = [];
+            for (const platform of platforms) {
+              for (const test of tests) {
+                if (test.image.startsWith('crazymax/diun') && !platform.platform.startsWith('linux-')) {
+                  continue;
+                }
+                includes.push({ ...platform, ...test });
+              }
+            }
+            core.info(JSON.stringify(includes, null, 2));
+            core.setOutput('includes', JSON.stringify(includes));
+
+  registry:
+    runs-on: ${{ matrix.runner }}
+    needs:
+      - build
+      - prepare-registry
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.prepare-registry.outputs.includes) }}
+    steps:
+      -
+        name: Download binary
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: ${{ env.DESTDIR }}
+          pattern: undock-${{ matrix.platform }}
+      -
+        name: Prepare binary
+        shell: bash
+        run: |
+          undockBin="${DESTDIR}/build/undock"
+          if [[ "${{ matrix.platform }}" == windows-* ]]; then
+            undockBin="${undockBin}.exe"
+          else
+            chmod +x "${undockBin}"
+          fi
+          echo "UNDOCK_BIN=${undockBin}" >> "$GITHUB_ENV"
+          "${undockBin}" --version
       -
         name: Run
+        shell: bash
         run: |
           flags="--rm-dist"
           if [ -n "${{ matrix.loglevel }}" ]; then
@@ -72,60 +135,92 @@ jobs:
             flags="${flags} --include ${{ matrix.include }}"
           fi
           set -x
-          ${{ env.DESTDIR }}/build/undock ${flags} ${{ matrix.image }} ./dist
+          "${UNDOCK_BIN}" ${flags} ${{ matrix.image }} ./dist
       -
         name: Dist content
+        shell: bash
         run: |
-          tree -nh ./dist
+          find ./dist -print
 
   cache:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    needs:
+      - build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          -
+            platform: darwin-amd64
+            runner: macos-26-intel
+          -
+            platform: darwin-arm64
+            runner: macos-26
+          -
+            platform: linux-amd64
+            runner: ubuntu-latest
+          -
+            platform: linux-arm64
+            runner: ubuntu-24.04-arm
+          -
+            platform: windows-amd64
+            runner: windows-latest
     steps:
-      -
-        name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      -
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
-      -
-        name: Build
-        uses: docker/bake-action@82490499d2e5613fcead7e128237ef0b0ea210f7 # v7.0.0
+      - name: Download binary
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          source: .
-          targets: binary
+          path: ${{ env.DESTDIR }}
+          pattern: undock-${{ matrix.platform }}
+      -
+        name: Prepare binary
+        shell: bash
+        run: |
+          undockBin="${DESTDIR}/build/undock"
+          if [[ "${{ matrix.platform }}" == windows-* ]]; then
+            undockBin="${undockBin}.exe"
+          else
+            chmod +x "${undockBin}"
+          fi
+          echo "UNDOCK_BIN=${undockBin}" >> "$GITHUB_ENV"
+          "${undockBin}" --version
       -
         name: Run
+        shell: bash
         run: |
-          ${{ env.DESTDIR }}/build/undock --log-level debug --rm-dist --all crazymax/buildx-pkg:latest ./dist
+          "${UNDOCK_BIN}" --log-level debug --rm-dist --all crazymax/buildx-pkg:latest ./dist
       -
         name: Dist content
+        shell: bash
         run: |
-          tree -nh ./dist
+          find ./dist -print
       -
         name: Re Run
+        shell: bash
         run: |
           rm -rf ./dist2
-          ${{ env.DESTDIR }}/build/undock --log-level debug --rm-dist --all crazymax/buildx-pkg:latest ./dist2
+          "${UNDOCK_BIN}" --log-level debug --rm-dist --all crazymax/buildx-pkg:latest ./dist2
       -
         name: Dist content
+        shell: bash
         run: |
-          tree -nh ./dist2
+          find ./dist2 -print
 
   docker-daemon:
     runs-on: ubuntu-latest
+    needs:
+      - build
     steps:
       -
-        name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      -
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
-      -
-        name: Build
-        uses: docker/bake-action@82490499d2e5613fcead7e128237ef0b0ea210f7 # v7.0.0
+        name: Download binary
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          source: .
-          targets: binary
+          path: ${{ env.DESTDIR }}
+          pattern: undock-linux-amd64
+      -
+        name: Fix perms and check
+        run: |
+          chmod +x ${DESTDIR}/build/undock
+          ${DESTDIR}/build/undock --version
       -
         name: Create Dockerfile
         run: |
@@ -144,7 +239,7 @@ jobs:
       -
         name: Run
         run: |
-          ${{ env.DESTDIR }}/build/undock --rm-dist --include /hello docker-daemon://image:local ./dist
+          ${DESTDIR}/build/undock --rm-dist --include /hello docker-daemon://image:local ./dist
       -
         name: Dist content
         run: |
@@ -152,19 +247,20 @@ jobs:
 
   docker-archive:
     runs-on: ubuntu-latest
+    needs:
+      - build
     steps:
       -
-        name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      -
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
-      -
-        name: Build
-        uses: docker/bake-action@82490499d2e5613fcead7e128237ef0b0ea210f7 # v7.0.0
+        name: Download binary
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          source: .
-          targets: binary
+          path: ${{ env.DESTDIR }}
+          pattern: undock-linux-amd64
+      -
+        name: Fix perms and check
+        run: |
+          chmod +x ${DESTDIR}/build/undock
+          ${DESTDIR}/build/undock --version
       -
         name: Create docker archive
         run: |
@@ -173,7 +269,7 @@ jobs:
       -
         name: Run
         run: |
-          ${{ env.DESTDIR }}/build/undock --rm-dist docker-archive://archive.tar ./dist
+          ${DESTDIR}/build/undock --rm-dist docker-archive://archive.tar ./dist
       -
         name: Dist content
         run: |
