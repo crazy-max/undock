@@ -14,6 +14,13 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const (
+	whiteoutPrefix     = ".wh."
+	whiteoutMetaPrefix = ".wh..wh."
+	whiteoutOpaqueDir  = ".wh..wh..opq"
+	whiteoutLinkDir    = ".wh..wh.plnk"
+)
+
 // ExtractBlobOpts holds extract blob options
 type ExtractBlobOpts struct {
 	Context  context.Context
@@ -65,6 +72,10 @@ func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 		entryName, err := normalizeArchivePath(f.NameInArchive)
 		if err != nil {
 			return err
+		}
+		if shouldSkipReservedWhiteoutPath(entryName) {
+			opts.Logger.Debug().Msgf("Skipping reserved whiteout metadata %s", f.NameInArchive)
+			return nil
 		}
 
 		if target, opaque, ok := whiteoutTarget(entryName); ok {
@@ -166,13 +177,29 @@ func pathIntersects(filenameList []string, filename string) bool {
 func whiteoutTarget(filename string) (target string, opaque bool, ok bool) {
 	dir, base := path.Split(path.Clean(filename))
 	switch {
-	case base == ".wh..wh..opq":
+	case base == whiteoutOpaqueDir:
 		return strings.TrimSuffix(dir, "/"), true, true
-	case strings.HasPrefix(base, ".wh."):
-		return path.Join(dir, strings.TrimPrefix(base, ".wh.")), false, true
+	case strings.HasPrefix(base, whiteoutMetaPrefix):
+		return "", false, false
+	case strings.HasPrefix(base, whiteoutPrefix):
+		return path.Join(dir, strings.TrimPrefix(base, whiteoutPrefix)), false, true
 	default:
 		return "", false, false
 	}
+}
+
+func shouldSkipReservedWhiteoutPath(filename string) bool {
+	for _, segment := range strings.Split(filename, "/") {
+		switch {
+		case segment == whiteoutOpaqueDir:
+			return false
+		case segment == whiteoutLinkDir:
+			return true
+		case strings.HasPrefix(segment, whiteoutMetaPrefix):
+			return true
+		}
+	}
+	return false
 }
 
 func applyOpaqueWhiteout(dest string, target string, createdInLayer map[string]struct{}) error {

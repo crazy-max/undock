@@ -185,6 +185,47 @@ func TestExtractBlobRejectsBreakoutWhiteoutPath(t *testing.T) {
 	require.FileExists(t, outside)
 }
 
+func TestExtractBlobIgnoresReservedWhiteoutMetadataFile(t *testing.T) {
+	root := t.TempDir()
+	dest := filepath.Join(root, "dist")
+	require.NoError(t, os.MkdirAll(filepath.Join(dest, "dir"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dest, "dir", ".wh.keep"), []byte("keep"), 0o644))
+
+	layer2 := filepath.Join(root, "layer2.tar")
+	writeTarFile(t, layer2, []tarEntry{
+		{name: "dir/.wh..wh.keep"},
+	})
+
+	opts := ExtractBlobOpts{
+		Context: context.Background(),
+		Logger:  zerolog.New(io.Discard),
+	}
+
+	require.NoError(t, ExtractBlob(layer2, dest, opts))
+
+	require.FileExists(t, filepath.Join(dest, "dir", ".wh.keep"))
+}
+
+func TestExtractBlobSkipsWhiteoutMetadataDirectory(t *testing.T) {
+	root := t.TempDir()
+	dest := filepath.Join(root, "dist")
+
+	layer := filepath.Join(root, "layer.tar")
+	writeTarFile(t, layer, []tarEntry{
+		{name: ".wh..wh.plnk/link", body: "metadata"},
+		{name: "real.txt", body: "real"},
+	})
+
+	err := ExtractBlob(layer, dest, ExtractBlobOpts{
+		Context: context.Background(),
+		Logger:  zerolog.New(io.Discard),
+	})
+	require.NoError(t, err)
+
+	require.NoDirExists(t, filepath.Join(dest, ".wh..wh.plnk"))
+	require.FileExists(t, filepath.Join(dest, "real.txt"))
+}
+
 type tarEntry struct {
 	name string
 	body string
