@@ -5,6 +5,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -59,6 +60,18 @@ func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 	}
 
 	return extractor.Extract(opts.Context, input, func(ctx context.Context, f archives.FileInfo) error {
+		if target, opaque, ok := whiteoutTarget(f.NameInArchive); ok {
+			if !pathIntersects(pathsInArchive, target) {
+				return nil
+			}
+			if opaque {
+				opts.Logger.Debug().Msgf("Applying opaque whiteout %s", f.NameInArchive)
+				return applyOpaqueWhiteout(dest, target)
+			}
+			opts.Logger.Debug().Msgf("Applying whiteout %s", f.NameInArchive)
+			return removePath(filepath.Join(dest, filepath.FromSlash(target)))
+		}
+
 		if !fileIsIncluded(pathsInArchive, f.NameInArchive) {
 			return nil
 		}
@@ -69,18 +82,18 @@ func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 			opts.Logger.Debug().Msgf("Extracting %s", f.NameInArchive)
 		}
 
-		path := filepath.Join(dest, f.NameInArchive)
-		if err = os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		outPath := filepath.Join(dest, filepath.FromSlash(f.NameInArchive))
+		if err = os.MkdirAll(filepath.Dir(outPath), 0o700); err != nil {
 			return err
 		}
 
 		switch {
 		case f.IsDir():
-			return os.MkdirAll(path, f.Mode())
+			return os.MkdirAll(outPath, f.Mode())
 		case f.Mode().IsRegular():
-			return writeFile(ctx, path, f)
+			return writeFile(ctx, outPath, f)
 		case f.Mode()&fs.ModeSymlink != 0:
-			return writeSymlink(ctx, path, f)
+			return writeSymlink(ctx, outPath, f)
 		default:
 			return errors.Errorf("cannot handle file mode: %v", f.Mode())
 		}
@@ -103,6 +116,63 @@ func fileIsIncluded(filenameList []string, filename string) bool {
 		}
 	}
 	return false
+}
+
+func pathIntersects(filenameList []string, filename string) bool {
+	// include all paths if there is no specific list
+	if len(filenameList) == 0 {
+		return true
+	}
+	for _, fn := range filenameList {
+		trimmed := strings.TrimSuffix(fn, "/")
+		if filename == trimmed {
+			return true
+		}
+		if strings.HasPrefix(filename, trimmed+"/") {
+			return true
+		}
+		if strings.HasPrefix(trimmed, filename+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+func whiteoutTarget(filename string) (target string, opaque bool, ok bool) {
+	dir, base := path.Split(path.Clean(filename))
+	switch {
+	case base == ".wh..wh..opq":
+		return strings.TrimSuffix(dir, "/"), true, true
+	case strings.HasPrefix(base, ".wh."):
+		return path.Join(dir, strings.TrimPrefix(base, ".wh.")), false, true
+	default:
+		return "", false, false
+	}
+}
+
+func applyOpaqueWhiteout(dest string, target string) error {
+	targetPath := filepath.Join(dest, filepath.FromSlash(target))
+	entries, err := os.ReadDir(targetPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	for _, entry := range entries {
+		if err := removePath(filepath.Join(targetPath, entry.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func removePath(path string) error {
+	err := os.RemoveAll(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
 }
 
 func writeFile(ctx context.Context, path string, f archives.FileInfo) error {
