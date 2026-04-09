@@ -62,7 +62,10 @@ func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 	createdInLayer := map[string]struct{}{}
 
 	return extractor.Extract(opts.Context, input, func(ctx context.Context, f archives.FileInfo) error {
-		entryName := normalizeArchivePath(f.NameInArchive)
+		entryName, err := normalizeArchivePath(f.NameInArchive)
+		if err != nil {
+			return err
+		}
 
 		if target, opaque, ok := whiteoutTarget(entryName); ok {
 			if !pathIntersects(pathsInArchive, target) {
@@ -128,12 +131,16 @@ func fileIsIncluded(filenameList []string, filename string) bool {
 	return false
 }
 
-func normalizeArchivePath(filename string) string {
-	filename = strings.TrimPrefix(filename, "/")
-	if filename == "" {
-		return "."
+func normalizeArchivePath(filename string) (string, error) {
+	filename = strings.ReplaceAll(filename, "\\", "/")
+	cleaned := path.Clean(strings.TrimPrefix(filename, "/"))
+	if cleaned == "." {
+		return ".", nil
 	}
-	return path.Clean(filename)
+	if cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+		return "", errors.Errorf("archive path %q resolves outside destination", filename)
+	}
+	return cleaned, nil
 }
 
 func pathIntersects(filenameList []string, filename string) bool {

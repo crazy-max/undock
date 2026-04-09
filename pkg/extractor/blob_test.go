@@ -148,6 +148,43 @@ func TestExtractBlobKeepsSameLayerFilesWhenWhiteoutComesLater(t *testing.T) {
 	require.FileExists(t, filepath.Join(dest, "dir", "sub", "keep.txt"))
 }
 
+func TestExtractBlobRejectsBreakoutArchivePath(t *testing.T) {
+	root := t.TempDir()
+	dest := filepath.Join(root, "dist")
+	outside := filepath.Join(root, "escape.txt")
+
+	layer := filepath.Join(root, "layer.tar")
+	writeTarFile(t, layer, []tarEntry{
+		{name: "../escape.txt", body: "nope"},
+	})
+
+	err := ExtractBlob(layer, dest, ExtractBlobOpts{
+		Context: context.Background(),
+		Logger:  zerolog.New(io.Discard),
+	})
+	require.ErrorContains(t, err, "resolves outside destination")
+	require.NoFileExists(t, outside)
+}
+
+func TestExtractBlobRejectsBreakoutWhiteoutPath(t *testing.T) {
+	root := t.TempDir()
+	dest := filepath.Join(root, "dist")
+	outside := filepath.Join(root, "escape.txt")
+	require.NoError(t, os.WriteFile(outside, []byte("keep"), 0o644))
+
+	layer := filepath.Join(root, "layer.tar")
+	writeTarFile(t, layer, []tarEntry{
+		{name: "..\\.wh.escape.txt"},
+	})
+
+	err := ExtractBlob(layer, dest, ExtractBlobOpts{
+		Context: context.Background(),
+		Logger:  zerolog.New(io.Discard),
+	})
+	require.ErrorContains(t, err, "resolves outside destination")
+	require.FileExists(t, outside)
+}
+
 type tarEntry struct {
 	name string
 	body string
