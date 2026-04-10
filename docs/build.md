@@ -1,7 +1,7 @@
 # Build
 
-Everything is dockerized and handled by [buildx bake](https://github.com/docker/buildx/blob/master/docs/reference/buildx_bake.md)
-for an agnostic usage of this project:
+Everything is dockerized and handled by [Buildx Bake](https://docs.docker.com/build/bake/) for an agnostic usage of
+this project:
 
 ```shell
 git clone https://github.com/crazy-max/undock.git undock
