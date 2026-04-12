@@ -14,12 +14,16 @@
 
 ---
 
-## What's Undock?
+## What is Undock?
 
-**Undock** is a CLI application that allows you to extract contents of a
-container image in a local folder. This can be useful if you use a registry
-to store artifacts in a scratch image, and you want to extract them on your
-local machine with a single command.
+**Undock** is a CLI tool for unpacking files from container images into a
+local directory, without having to run the image as a container.
+
+It is useful when an image is being used as a transport format rather than
+something you want to launch, for example release artifacts, generated assets,
+root filesystems, or any other files published in an image. Undock reads the
+image from supported sources, lets you extract exactly what you need, and
+writes it to disk with a single command.
 
 See the [usage examples](usage/examples.md) for more info.
 
