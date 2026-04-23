@@ -8,6 +8,7 @@ run:
     - exclude_graphdriver_devicemapper
 
 linters:
+  default: none
   enable:
     - bodyclose
     - depguard
@@ -26,22 +27,6 @@ linters:
     - unused
     - whitespace
   settings:
-    gocritic:
-      disabled-checks:
-        - "ifElseChain"
-        - "assignOp"
-        - "appendAssign"
-        - "singleCaseSwitch"
-    importas:
-      alias:
-        - pkg: "github.com/opencontainers/image-spec/specs-go/v1"
-          alias: "ocispecs"
-        - pkg: "github.com/opencontainers/go-digest"
-          alias: "digest"
-    govet:
-      enable:
-        - nilness
-        - unusedwrite
     depguard:
       rules:
         main:
@@ -58,6 +43,12 @@ linters:
         - pattern: ^ctx\.Err(# use context\.Cause instead)?$
         - pattern: ^fmt\.Errorf(# use errors\.Errorf instead)?$
         - pattern: ^platforms\.DefaultString(# use platforms\.Format(platforms\.DefaultSpec()) instead\.)?$
+    gocritic:
+      disabled-checks:
+        - "ifElseChain"
+        - "assignOp"
+        - "appendAssign"
+        - "singleCaseSwitch"
     gosec:
       excludes:
         - G115
@@ -65,12 +56,16 @@ linters:
         - G402
       config:
         G306: "0644"
+    govet:
+      enable:
+        - nilness
+        - unusedwrite
     testifylint:
       disable:
-        - "empty"
-        - "bool-compare"
-        - "len"
-        - "negative-positive"
+        - empty
+        - bool-compare
+        - len
+        - negative-positive
   exclusions:
     generated: lax
     presets:
@@ -79,28 +74,25 @@ linters:
       - legacy
       - std-error-handling
     rules:
-      -
-        linters:
+      - linters:
           - revive
         text: stutters
-      -
-        linters:
+      - linters:
+          - revive
+        text: var-naming
+      - linters:
           - revive
         text: empty-block
-      -
-        linters:
+      - linters:
           - revive
         text: superfluous-else
-      -
-        linters:
+      - linters:
           - revive
         text: unused-parameter
-      -
-        linters:
+      - linters:
           - revive
         text: redefines-builtin-id
-      -
-        linters:
+      - linters:
           - revive
         text: if-return
 
