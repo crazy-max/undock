@@ -3,11 +3,11 @@
 package image
 
 import (
-	"errors"
-	"math/rand/v2"
 	"os"
 	"time"
 
+	"github.com/cenkalti/backoff/v5"
+	"github.com/pkg/errors"
 	"go.podman.io/image/v5/copy"
 	"go.podman.io/image/v5/signature"
 	"go.podman.io/image/v5/types"
@@ -21,35 +21,26 @@ const (
 )
 
 func (c *Client) copyCachedImage(policyContext *signature.PolicyContext, dstRef, srcRef types.ImageReference, opts *copy.Options) ([]byte, error) {
-	var (
-		manblob []byte
-		err     error
-	)
-
-	for attempt := 1; attempt <= copyImageAttempts; attempt++ {
-		manblob, err = copy.Image(c.ctx, policyContext, dstRef, srcRef, opts)
-		if err == nil || !isRetryableCopyImageError(err) || attempt == copyImageAttempts {
+	bo := backoff.NewExponentialBackOff()
+	bo.InitialInterval = copyImageBackoff
+	bo.RandomizationFactor = 0.5
+	bo.Multiplier = 2
+	bo.MaxInterval = copyImageMaxDelay
+	var attempt int
+	return backoff.Retry(c.ctx, func() ([]byte, error) {
+		attempt++
+		manblob, err := copy.Image(c.ctx, policyContext, dstRef, srcRef, opts)
+		if err == nil || isRetryableCopyImageError(err) {
 			return manblob, err
 		}
-
-		delay := copyImageBackoff << min(attempt-1, 3)
-		delay = min(delay, copyImageMaxDelay)
-		delay = delay/2 + time.Duration(rand.Int64N(int64(delay/2)+1))
-
-		c.logger.Warn().Err(err).Int("attempt", attempt).Int("max-attempts", copyImageAttempts).Dur("backoff", delay).Msg("Retrying cache copy after transient Windows filesystem error")
-
-		timer := time.NewTimer(delay)
-		select {
-		case <-c.ctx.Done():
-			if !timer.Stop() {
-				<-timer.C
-			}
-			return nil, c.ctx.Err()
-		case <-timer.C:
-		}
-	}
-
-	return manblob, err
+		return nil, backoff.Permanent(err)
+	},
+		backoff.WithBackOff(bo),
+		backoff.WithMaxTries(copyImageAttempts),
+		backoff.WithNotify(func(err error, delay time.Duration) {
+			c.logger.Warn().Err(err).Int("attempt", attempt).Int("max-attempts", copyImageAttempts).Dur("backoff", delay).Msg("Retrying cache copy after transient Windows filesystem error")
+		}),
+	)
 }
 
 func isRetryableCopyImageError(err error) bool {
