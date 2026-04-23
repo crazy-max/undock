@@ -3,7 +3,9 @@ package image
 import (
 	"testing"
 
+	digest "github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParse(t *testing.T) {
@@ -125,4 +127,21 @@ func TestParse(t *testing.T) {
 			assert.Equal(t, tt.expected.Tag, img.Tag)
 		})
 	}
+}
+
+func TestImageMethods(t *testing.T) {
+	img, err := Parse("docker.io/library/alpine:latest")
+	require.NoError(t, err)
+
+	assert.Equal(t, "docker.io/library/alpine", img.Name())
+	assert.Equal(t, "docker.io/library/alpine:latest", img.String())
+	assert.Equal(t, "latest", img.Reference())
+
+	dgst := digest.Digest("sha256:" + sha256digestHex)
+	require.NoError(t, img.WithDigest(dgst))
+
+	assert.Equal(t, dgst, img.Digest)
+	assert.Equal(t, "docker.io/library/alpine", img.Name())
+	assert.Equal(t, dgst.String(), img.Reference())
+	assert.Equal(t, "docker.io/library/alpine:latest"+sha256digest, img.String())
 }

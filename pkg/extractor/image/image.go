@@ -6,7 +6,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strings"
 
 	"github.com/containerd/platforms"
 	"github.com/crazy-max/undock/pkg/extractor"
@@ -61,9 +60,8 @@ func New(ctx context.Context, opts Options) (*extractor.Client, error) {
 		logger.Warn().Msgf("platform not set, using %s", platforms.Format(opts.Platform))
 	}
 
-	datadir := opts.CacheDir
-	if len(datadir) == 0 {
-		datadir = os.Getenv("XDG_DATA_HOME")
+	if len(opts.CacheDir) == 0 {
+		datadir := os.Getenv("XDG_DATA_HOME")
 		if len(datadir) == 0 {
 			home, err := os.UserHomeDir()
 			if err != nil {
@@ -71,9 +69,9 @@ func New(ctx context.Context, opts Options) (*extractor.Client, error) {
 			}
 			datadir = filepath.Join(home, ".local", "share")
 		}
+		opts.CacheDir = filepath.Join(datadir, "undock", "cache")
 	}
 
-	opts.CacheDir = filepath.Join(datadir, "undock", "cache")
 	if err := os.MkdirAll(opts.CacheDir, 0700); err != nil {
 		return nil, errors.Wrapf(err, "failed to create cache directory %q", opts.CacheDir)
 	}
@@ -100,7 +98,10 @@ func (c *Client) Extract() error {
 	if err != nil {
 		return errors.Wrap(err, "cannot cache source")
 	}
+	return c.extractCachedSource(manblob, cachedir)
+}
 
+func (c *Client) extractCachedSource(manblob []byte, cachedir string) error {
 	type manifestEntry struct {
 		platform ocispecs.Platform
 		manifest *manifest.OCI1
@@ -152,7 +153,7 @@ func (c *Client) Extract() error {
 						Str("platform", platforms.Format(me.platform)).
 						Str("media-type", layer.MediaType).
 						Str("blob", layer.Digest.String()).Logger()
-					if err = extractor.ExtractBlob(path.Join(cachedir, "blobs", layer.Digest.Algorithm().String(), layer.Digest.Hex()), dest, extractor.ExtractBlobOpts{
+					if err := extractor.ExtractBlob(path.Join(cachedir, "blobs", layer.Digest.Algorithm().String(), layer.Digest.Hex()), dest, extractor.ExtractBlobOpts{
 						Context:  c.ctx,
 						Logger:   sublogger,
 						Includes: c.opts.Includes,
@@ -166,28 +167,4 @@ func (c *Client) Extract() error {
 	}
 
 	return eg.Wait()
-}
-
-//nolint:unused
-func formatReference(source string) (string, string) {
-	scheme := sourceScheme(source)
-	switch scheme {
-	case "":
-		return "docker://" + source, "docker"
-	case "docker":
-		return source, scheme
-	default:
-		return strings.Replace(source, scheme+"://", scheme+":", 1), scheme
-	}
-}
-
-//nolint:unused
-func sourceScheme(source string) string {
-	schemes := []string{"containers-storage", "docker", "docker-archive", "docker-daemon", "oci", "oci-archive", "ostree"}
-	for _, scheme := range schemes {
-		if strings.HasPrefix(source, scheme+"://") {
-			return scheme
-		}
-	}
-	return ""
 }
