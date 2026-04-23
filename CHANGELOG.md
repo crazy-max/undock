@@ -11,6 +11,8 @@
 * Bump golang.org/x/sys to 0.43.0 in #410
 * Bump go.podman.io/image/v5 to 5.39.2 in #397
 
+**Full Changelog**: [`v0.11.0...v0.12.0`](https://github.com/crazy-max/undock/compare/v0.11.0...v0.12.0)
+
 ## 0.11.0 (2025/12/30)
 
 * Go 1.25 by @crazy-max in #368
@@ -24,6 +26,8 @@
 * Bump golang.org/x/sync to 0.19.0 in #363
 * Bump golang.org/x/sys to 0.39.0 in #362
 
+**Full Changelog**: [`v0.10.0...v0.11.0`](https://github.com/crazy-max/undock/compare/v0.10.0...v0.11.0)
+
 ## 0.10.0 (2025/04/18)
 
 * Fix fallback to home for cache dir by @crazy-max in #316
@@ -34,6 +38,8 @@
 * Bump github.com/rs/zerolog to 1.34.0 in #307
 * Bump golang.org/x/sync to 0.13.0 in #313
 * Bump golang.org/x/sys to 0.32.0 in #284 #314
+
+**Full Changelog**: [`v0.9.0...v0.10.0`](https://github.com/crazy-max/undock/compare/v0.9.0...v0.10.0)
 
 ## 0.9.0 (2024/12/24)
 
@@ -47,6 +53,8 @@
 * Bump github.com/stretchr/testify to 1.10.0 in #274
 * Bump golang.org/x/sync to 0.10.0 in #276
 * Bump golang.org/x/sys to 0.28.0 in #277
+
+**Full Changelog**: [`v0.8.0...v0.9.0`](https://github.com/crazy-max/undock/compare/v0.8.0...v0.9.0)
 
 ## 0.8.0 (2024/06/20)
 
@@ -63,6 +71,8 @@
 * Bump golang.org/x/sync from 0.5.0 to 0.7.0 in #215
 * Bump golang.org/x/sys to 0.21.0 in #214 #235
 
+**Full Changelog**: [`v0.7.0...v0.8.0`](https://github.com/crazy-max/undock/compare/v0.7.0...v0.8.0)
+
 ## 0.7.0 (2023/12/21)
 
 * Docker auth config support by @crazy-max in #186
@@ -76,18 +86,7 @@
 * Bump golang.org/x/sync to 0.5.0 in #172
 * Bump golang.org/x/sys to 0.15.0 in #175
 
-## 0.7.0-rc.1 (2023/12/19)
-
-* Docker auth config support by @crazy-max in #186
-* Go 1.21 by @crazy-max in #179 #185
-* Bump github.com/alecthomas/kong to 0.8.1 in #169
-* Bump github.com/containerd/containerd to 1.7.11 in #177
-* Bump github.com/docker/docker to 24.0.7+incompatible in #171
-* Bump github.com/go-jose/go-jose/v3 to 3.0.1 in #184
-* Bump github.com/rs/zerolog to 1.31.0 in #165
-* Bump golang.org/x/crypto to 0.17.0 in #187
-* Bump golang.org/x/sync to 0.5.0 in #172
-* Bump golang.org/x/sys to 0.15.0 in #175
+**Full Changelog**: [`v0.6.0...v0.7.0`](https://github.com/crazy-max/undock/compare/v0.7.0-rc.1...v0.7.0)
 
 ## 0.6.0 (2023/09/15)
 
@@ -100,6 +99,8 @@
 * Bump github.com/rs/zerolog to 1.30.0 in #142
 * Bump golang.org/x/sys to 0.11.0 in #136 #143
 * Bump golang.org/x/sys to 0.11.0 in #143
+
+**Full Changelog**: [`v0.5.0...v0.6.0`](https://github.com/crazy-max/undock/compare/v0.5.0...v0.6.0)
 
 ## 0.5.0 (2023/07/02)
 
@@ -118,6 +119,8 @@
 * Bump golang.org/x/sync to 0.3.0 in #111 #128
 * Bump golang.org/x/sys to 0.7.0 in #96 #100 #110 #127
 
+**Full Changelog**: [`v0.4.0...v0.5.0`](https://github.com/crazy-max/undock/compare/v0.4.0...v0.5.0)
+
 ## 0.4.0 (2023/02/14)
 
 * Go 1.19 by @crazy-max in #65 #25
@@ -134,6 +137,8 @@
 * Bump github.com/opencontainers/image-spec to 1.1.0-rc2 in #68
 * Bump golang.org/x/sys to 0.5.0 in #91
 
+**Full Changelog**: [`v0.3.0...v0.4.0`](https://github.com/crazy-max/undock/compare/v0.3.0...v0.4.0)
+
 ## 0.3.0 (2022/03/28)
 
 * Support `.gz` format by @crazy-max in #22
@@ -144,6 +149,8 @@
 * Bump github.com/mholt/archiver/v4 to 4.0.0-alpha.5 in #12
 * Bump github.com/alecthomas/kong to 0.5.0 in #10 #17
 * Bump github.com/containerd/containerd to 1.6.2 in #9 #14 #21
+
+**Full Changelog**: [`v0.2.0...v0.3.0`](https://github.com/crazy-max/undock/compare/v0.2.0...v0.3.0)
 
 ## 0.2.0 (2022/02/13)
 
@@ -158,6 +165,8 @@
 * Docs website with mkdocs by @crazy-max in #1
 * Bump github.com/alecthomas/kong to 0.4.0 in #4
 * Bump github.com/containers/image/v5 to 5.19.1 in #2 #5
+
+**Full Changelog**: [`v0.1.0...v0.2.0`](https://github.com/crazy-max/undock/compare/v0.1.0...v0.2.0)
 
 ## 0.1.0 (2022/01/24)
 

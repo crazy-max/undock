@@ -1,6 +1,6 @@
 # Support [![](https://isitmaintained.com/badge/resolution/crazy-max/undock.svg)](https://isitmaintained.com/project/crazy-max/undock)
 
-First, [be a good guy](https://github.com/kossnocorp/opensource.how/blob/classic/README.md).
+First, [be respectful](https://github.com/kossnocorp/opensource.how/blob/classic/README.md).
 
 ## Reporting an issue
 
