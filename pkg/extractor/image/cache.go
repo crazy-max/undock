@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	dockercli "github.com/crazy-max/undock/pkg/docker"
 	"github.com/crazy-max/undock/pkg/image"
+	dockerclient "github.com/docker/docker/client"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.podman.io/image/v5/copy"
@@ -55,11 +55,15 @@ func (c *Client) cacheSource(src string) ([]byte, string, error) {
 			return nil, "", errors.Wrap(err, "cannot get docker reference digest")
 		}
 	case "docker-daemon":
-		dcli, err := dockercli.New(c.ctx)
+		dcli, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
 		if err != nil {
 			return nil, "", err
 		}
-		if img, err := dcli.ImageInspect(strings.TrimPrefix(src, "docker-daemon://")); err == nil {
+		defer dcli.Close()
+		if _, err := dcli.ServerVersion(c.ctx); err != nil {
+			return nil, "", err
+		}
+		if img, err := dcli.ImageInspect(c.ctx, strings.TrimPrefix(src, "docker-daemon://")); err == nil {
 			cacheDigest = srcObj.Scheme() + "-" + strings.TrimPrefix(img.ID, "sha256:")
 		} else {
 			return nil, "", err
