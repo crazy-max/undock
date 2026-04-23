@@ -3,10 +3,10 @@
 package image
 
 import (
-	"errors"
 	"os"
 	"testing"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sys/windows"
 )
