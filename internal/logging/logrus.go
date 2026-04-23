@@ -10,17 +10,18 @@ type LogrusFormatter struct{}
 
 // Format renders a single log entry from logrus entry to zerolog
 func (f *LogrusFormatter) Format(entry *logrus.Entry) ([]byte, error) {
+	fields := map[string]interface{}(entry.Data)
 	switch entry.Level {
 	case logrus.ErrorLevel:
-		log.Error().Fields(entry.Data).Msg(entry.Message)
+		log.Error().Fields(fields).Msg(entry.Message)
 	case logrus.WarnLevel:
-		log.Warn().Fields(entry.Data).Msg(entry.Message)
+		log.Warn().Fields(fields).Msg(entry.Message)
 	case logrus.DebugLevel:
-		log.Debug().Fields(entry.Data).Msg(entry.Message)
+		log.Debug().Fields(fields).Msg(entry.Message)
 	case logrus.TraceLevel:
-		log.Trace().Fields(entry.Data).Msg(entry.Message)
+		log.Trace().Fields(fields).Msg(entry.Message)
 	default:
-		log.Info().Fields(entry.Data).Msg(entry.Message)
+		log.Info().Fields(fields).Msg(entry.Message)
 	}
 	return nil, nil
 }
