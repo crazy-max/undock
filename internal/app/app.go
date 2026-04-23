@@ -15,7 +15,6 @@ import (
 
 // Undock represents an active undock object
 type Undock struct {
-	ctx      context.Context
 	meta     config.Meta
 	cli      config.Cli
 	platform ocispecs.Platform
@@ -32,7 +31,6 @@ func New(meta config.Meta, cli config.Cli) (*Undock, error) {
 	}
 
 	return &Undock{
-		ctx:      context.Background(),
 		meta:     meta,
 		cli:      cli,
 		platform: platform,
@@ -40,7 +38,7 @@ func New(meta config.Meta, cli config.Cli) (*Undock, error) {
 }
 
 // Start starts undock
-func (c *Undock) Start() error {
+func (c *Undock) Start(ctx context.Context) error {
 	if _, err := os.Stat(c.cli.Dist); err == nil && c.cli.RmDist {
 		if err := os.RemoveAll(c.cli.Dist); err != nil {
 			return errors.Wrapf(err, "failed to remove dist folder %q", c.cli.Dist)
@@ -56,7 +54,7 @@ func (c *Undock) Start() error {
 		return errors.Errorf("unsupported source %q", c.cli.Source)
 	}
 
-	xcli, err := ximage.New(c.ctx, ximage.Options{
+	xcli, err := ximage.New(ctx, ximage.Options{
 		Source:   c.cli.Source,
 		Platform: c.platform,
 		Includes: c.cli.Includes,
@@ -85,9 +83,4 @@ func validateScheme(source string) (bool, error) {
 	}
 	_, err := image.Reference(source)
 	return err == nil, err
-}
-
-// Close closes undock
-func (c *Undock) Close() {
-	// noop
 }
