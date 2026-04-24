@@ -72,7 +72,8 @@ func New(ctx context.Context, opts Options) (*extractor.Client, error) {
 		opts.CacheDir = filepath.Join(datadir, "undock", "cache")
 	}
 
-	if err := os.MkdirAll(opts.CacheDir, 0o700); err != nil { //nolint:gosec // CacheDir is an explicit local CLI setting, not an extracted or untrusted path.
+	//nolint:gosec // CacheDir is an explicit local CLI setting, not an extracted or untrusted path.
+	if err := os.MkdirAll(opts.CacheDir, 0o700); err != nil {
 		return nil, errors.Wrapf(err, "failed to create cache directory %q", opts.CacheDir)
 	}
 
