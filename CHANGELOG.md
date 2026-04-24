@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.13.0 (2026/04/24)
+
+* Use backoff for image copy retries on Windows by @crazy-max in #436
+* Preserve logrus fields in zerolog output by @crazy-max in #432
+* Simplify shutdown lifecycle by @crazy-max in #430
+* Drop docker client wrapper by @crazy-max in #431
+* Go 1.26 by @crazy-max in #434
+* MkDocs Materials 9.7.5 by @crazy-max in #416
+* Bump github.com/rs/zerolog to 1.35.1 in #427
+
+**Full Changelog**: [`v0.12.0...v0.13.0`](https://github.com/crazy-max/undock/compare/v0.12.0...v0.13.0)
+
 ## 0.12.0 (2026/04/10)
 
 * Handle OCI whiteouts correctly during blob extraction by @crazy-max in #413
