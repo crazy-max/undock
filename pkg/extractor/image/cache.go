@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/crazy-max/undock/pkg/image"
-	dockerclient "github.com/docker/docker/client"
+	mobyclient "github.com/moby/moby/client"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.podman.io/image/v5/copy"
@@ -55,15 +55,15 @@ func (c *Client) cacheSource(src string) ([]byte, string, error) {
 			return nil, "", errors.Wrap(err, "cannot get docker reference digest")
 		}
 	case "docker-daemon":
-		dcli, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
+		mobycli, err := mobyclient.New(mobyclient.FromEnv)
 		if err != nil {
 			return nil, "", err
 		}
-		defer dcli.Close()
-		if _, err := dcli.ServerVersion(c.ctx); err != nil {
+		defer mobycli.Close()
+		if _, err := mobycli.ServerVersion(c.ctx, mobyclient.ServerVersionOptions{}); err != nil {
 			return nil, "", err
 		}
-		if img, err := dcli.ImageInspect(c.ctx, strings.TrimPrefix(src, "docker-daemon://")); err == nil {
+		if img, err := mobycli.ImageInspect(c.ctx, strings.TrimPrefix(src, "docker-daemon://")); err == nil {
 			cacheDigest = srcObj.Scheme() + "-" + strings.TrimPrefix(img.ID, "sha256:")
 		} else {
 			return nil, "", err
