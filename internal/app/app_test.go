@@ -106,7 +106,7 @@ func TestStartExtractsOCIImage(t *testing.T) {
 	require.NoError(t, err)
 	var foundDigestDir bool
 	for _, entry := range cacheEntries {
-		if !entry.IsDir() || entry.Name() == "blobs" {
+		if !entry.IsDir() || entry.Name() == "blobs" || entry.Name() == "containers" {
 			continue
 		}
 		foundDigestDir = true
