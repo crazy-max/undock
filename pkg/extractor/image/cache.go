@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -110,17 +111,40 @@ func (c *Client) cacheSource(src string) ([]byte, string, error) {
 }
 
 func (c *Client) srcCtx(auth *types.DockerAuthConfig, insecure bool) (*types.SystemContext, error) {
+	registriesConfPath, registriesConfDirPath, err := c.registriesConf()
+	if err != nil {
+		return nil, err
+	}
+
 	sysCtx := &types.SystemContext{
 		DockerAuthConfig:                  auth,
 		DockerDaemonInsecureSkipTLSVerify: insecure,
 		DockerInsecureSkipTLSVerify:       types.NewOptionalBool(insecure),
 		DockerRegistryUserAgent:           c.opts.RegistryUserAgent,
+		SystemRegistriesConfPath:          registriesConfPath,
+		SystemRegistriesConfDirPath:       registriesConfDirPath,
 		OSChoice:                          c.opts.Platform.OS,
 		ArchitectureChoice:                c.opts.Platform.Architecture,
 		VariantChoice:                     c.opts.Platform.Variant,
 		BlobInfoCacheDir:                  filepath.Join(c.opts.CacheDir, "blobs"),
 	}
 	return sysCtx, nil
+}
+
+func (c *Client) registriesConf() (string, string, error) {
+	configDir := filepath.Join(c.opts.CacheDir, "containers")
+	if err := os.MkdirAll(configDir, 0o700); err != nil {
+		return "", "", errors.Wrapf(err, "failed to create containers config directory %q", configDir)
+	}
+	configPath := filepath.Join(configDir, "registries.conf")
+	if err := os.WriteFile(configPath, []byte("# Intentionally empty registries.conf v2 file for undock.\n"), 0o600); err != nil {
+		return "", "", errors.Wrapf(err, "failed to write registries configuration %q", configPath)
+	}
+	configDropInDir := filepath.Join(configDir, "registries.conf.d")
+	if err := os.MkdirAll(configDropInDir, 0o700); err != nil {
+		return "", "", errors.Wrapf(err, "failed to create registries configuration directory %q", configDropInDir)
+	}
+	return configPath, configDropInDir, nil
 }
 
 func (c *Client) dstCtx(_ string) (*types.SystemContext, error) {

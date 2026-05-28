@@ -10,10 +10,12 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.podman.io/image/v5/pkg/sysregistriesv2"
 	"go.podman.io/image/v5/types"
 )
 
 func TestSrcCtxUsesRegistrySettings(t *testing.T) {
+	cacheDir := t.TempDir()
 	c := &Client{
 		opts: Options{
 			Platform: ocispecs.Platform{
@@ -21,7 +23,7 @@ func TestSrcCtxUsesRegistrySettings(t *testing.T) {
 				Architecture: "arm64",
 				Variant:      "v8",
 			},
-			CacheDir: filepath.Join("cache", "root"),
+			CacheDir: cacheDir,
 
 			RegistryUserAgent: "undock-tests",
 		},
@@ -37,7 +39,14 @@ func TestSrcCtxUsesRegistrySettings(t *testing.T) {
 	assert.Equal(t, "linux", sysCtx.OSChoice)
 	assert.Equal(t, "arm64", sysCtx.ArchitectureChoice)
 	assert.Equal(t, "v8", sysCtx.VariantChoice)
-	assert.Equal(t, filepath.Join("cache", "root", "blobs"), sysCtx.BlobInfoCacheDir)
+	assert.Equal(t, filepath.Join(cacheDir, "blobs"), sysCtx.BlobInfoCacheDir)
+	assert.Equal(t, filepath.Join(cacheDir, "containers", "registries.conf"), sysCtx.SystemRegistriesConfPath)
+	assert.Equal(t, filepath.Join(cacheDir, "containers", "registries.conf.d"), sysCtx.SystemRegistriesConfDirPath)
+	assert.FileExists(t, sysCtx.SystemRegistriesConfPath)
+	assert.DirExists(t, sysCtx.SystemRegistriesConfDirPath)
+
+	_, err = sysregistriesv2.TryUpdatingCache(sysCtx)
+	require.NoError(t, err)
 }
 
 func TestDstCtxForcesDecompression(t *testing.T) {
