@@ -169,6 +169,27 @@ func TestExtractBlobRejectsBreakoutArchivePath(t *testing.T) {
 	require.NoFileExists(t, outside)
 }
 
+func TestExtractBlobRejectsSymlinkTraversal(t *testing.T) {
+	skipIfSymlinkUnsupported(t)
+
+	root := t.TempDir()
+	dest := filepath.Join(root, "dist")
+	outside := filepath.Join(root, "escaped.txt")
+
+	layer := filepath.Join(root, "layer.tar")
+	writeTarFile(t, layer, []tarEntry{
+		{name: "pwn", typeflag: tar.TypeSymlink, linkname: ".."},
+		{name: "pwn/escaped.txt", body: "nope"},
+	})
+
+	err := ExtractBlob(layer, dest, ExtractBlobOpts{
+		Context: context.Background(),
+		Logger:  zerolog.New(io.Discard),
+	})
+	require.Error(t, err)
+	require.NoFileExists(t, outside)
+}
+
 func TestExtractBlobRejectsBreakoutWhiteoutPath(t *testing.T) {
 	root := t.TempDir()
 	dest := filepath.Join(root, "dist")
@@ -298,16 +319,21 @@ func TestExtractBlobKeepsRecreatedDirWhenWhiteoutComesLater(t *testing.T) {
 func TestWriteFileHonorsCanceledContext(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "source.txt")
-	dest := filepath.Join(root, "dest.txt")
+	destName := "dest.txt"
+	dest := filepath.Join(root, destName)
 	require.NoError(t, os.WriteFile(source, []byte("payload"), 0o644))
 
 	info, err := os.Stat(source)
 	require.NoError(t, err)
 
+	rootFS, err := os.OpenRoot(root)
+	require.NoError(t, err)
+	defer rootFS.Close()
+
 	ctx, cancel := context.WithCancelCause(context.Background())
 	cancel(nil)
 
-	err = writeFile(ctx, dest, archives.FileInfo{
+	err = writeFile(ctx, rootFS, destName, archives.FileInfo{
 		FileInfo: info,
 		Open: func() (fs.File, error) {
 			return os.Open(source)
@@ -325,6 +351,17 @@ type tarEntry struct {
 	body     string
 	mode     int64
 	typeflag byte
+	linkname string
+}
+
+func skipIfSymlinkUnsupported(t *testing.T) {
+	t.Helper()
+
+	dir := t.TempDir()
+	err := os.Symlink("target", filepath.Join(dir, "link"))
+	if err != nil {
+		t.Skipf("symlinks are not supported: %v", err)
+	}
 }
 
 func writeTarFile(t *testing.T, filename string, entries []tarEntry) {
@@ -374,7 +411,7 @@ func writeTarEntries(t *testing.T, tw *tar.Writer, entries []tarEntry) {
 		}
 
 		size := int64(len(entry.body))
-		if typeflag == tar.TypeDir {
+		if typeflag == tar.TypeDir || typeflag == tar.TypeSymlink {
 			size = 0
 		}
 
@@ -383,9 +420,10 @@ func writeTarEntries(t *testing.T, tw *tar.Writer, entries []tarEntry) {
 			Mode:     mode,
 			Size:     size,
 			Typeflag: typeflag,
+			Linkname: entry.linkname,
 		}
 		require.NoError(t, tw.WriteHeader(hdr))
-		if entry.body == "" || typeflag == tar.TypeDir {
+		if entry.body == "" || typeflag == tar.TypeDir || typeflag == tar.TypeSymlink {
 			continue
 		}
 		_, err := tw.Write([]byte(entry.body))

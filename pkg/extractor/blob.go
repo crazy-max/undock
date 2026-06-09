@@ -68,6 +68,15 @@ func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 
 	createdInLayer := map[string]struct{}{}
 
+	if err := os.MkdirAll(dest, 0o700); err != nil {
+		return err
+	}
+	root, err := os.OpenRoot(dest)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+
 	return extractor.Extract(opts.Context, input, func(ctx context.Context, f archives.FileInfo) error {
 		entryName, err := normalizeArchivePath(f.NameInArchive)
 		if err != nil {
@@ -84,10 +93,10 @@ func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 			}
 			if opaque {
 				opts.Logger.Debug().Msgf("Applying opaque whiteout %s", f.NameInArchive)
-				return applyOpaqueWhiteout(dest, target, createdInLayer)
+				return applyOpaqueWhiteout(root, target, createdInLayer)
 			}
 			opts.Logger.Debug().Msgf("Applying whiteout %s", f.NameInArchive)
-			return applyWhiteout(dest, target, createdInLayer)
+			return applyWhiteout(root, target, createdInLayer)
 		}
 
 		if !fileIsIncluded(pathsInArchive, entryName) {
@@ -100,18 +109,18 @@ func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 			opts.Logger.Debug().Msgf("Extracting %s", f.NameInArchive)
 		}
 
-		outPath := filepath.Join(dest, filepath.FromSlash(entryName))
-		if err = os.MkdirAll(filepath.Dir(outPath), 0o700); err != nil {
+		outPath := filepath.FromSlash(entryName)
+		if err = root.MkdirAll(filepath.Dir(outPath), 0o700); err != nil {
 			return err
 		}
 
 		switch {
 		case f.IsDir():
-			err = os.MkdirAll(outPath, f.Mode())
+			err = root.MkdirAll(outPath, f.Mode().Perm())
 		case f.Mode().IsRegular():
-			err = writeFile(ctx, outPath, f)
+			err = writeFile(ctx, root, outPath, f)
 		case f.Mode()&fs.ModeSymlink != 0:
-			err = writeSymlink(ctx, outPath, f)
+			err = writeSymlink(ctx, root, outPath, f)
 		default:
 			return errors.Errorf("cannot handle file mode: %v", f.Mode())
 		}
@@ -202,17 +211,17 @@ func shouldSkipReservedWhiteoutPath(filename string) bool {
 	return false
 }
 
-func applyOpaqueWhiteout(dest string, target string, createdInLayer map[string]struct{}) error {
-	return removePathPreservingCurrentLayer(dest, target, createdInLayer, false)
+func applyOpaqueWhiteout(root *os.Root, target string, createdInLayer map[string]struct{}) error {
+	return removePathPreservingCurrentLayer(root, target, createdInLayer, false)
 }
 
-func applyWhiteout(dest string, target string, createdInLayer map[string]struct{}) error {
-	return removePathPreservingCurrentLayer(dest, target, createdInLayer, true)
+func applyWhiteout(root *os.Root, target string, createdInLayer map[string]struct{}) error {
+	return removePathPreservingCurrentLayer(root, target, createdInLayer, true)
 }
 
-func removePathPreservingCurrentLayer(dest string, target string, createdInLayer map[string]struct{}, removeSelf bool) error {
-	targetPath := filepath.Join(dest, filepath.FromSlash(target))
-	info, err := os.Lstat(targetPath)
+func removePathPreservingCurrentLayer(root *os.Root, target string, createdInLayer map[string]struct{}, removeSelf bool) error {
+	targetPath := filepath.FromSlash(target)
+	info, err := root.Lstat(targetPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -226,14 +235,20 @@ func removePathPreservingCurrentLayer(dest string, target string, createdInLayer
 		if protectSelf {
 			return nil
 		}
-		return removePath(targetPath)
+		return removePath(root, targetPath)
 	}
 
 	if removeSelf && !protectSelf && len(protectedChildren) == 0 {
-		return removePath(targetPath)
+		return removePath(root, targetPath)
 	}
 
-	entries, err := os.ReadDir(targetPath)
+	dir, err := root.Open(targetPath)
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+
+	entries, err := dir.ReadDir(-1)
 	if err != nil {
 		return err
 	}
@@ -241,7 +256,7 @@ func removePathPreservingCurrentLayer(dest string, target string, createdInLayer
 		if _, ok := protectedChildren[entry.Name()]; ok {
 			continue
 		}
-		if err := removePath(filepath.Join(targetPath, entry.Name())); err != nil {
+		if err := removePath(root, filepath.Join(targetPath, entry.Name())); err != nil {
 			return err
 		}
 	}
@@ -269,22 +284,22 @@ func protectedPathsInCurrentLayer(createdInLayer map[string]struct{}, target str
 	return protectSelf, protectedChildren
 }
 
-func removePath(path string) error {
-	err := os.RemoveAll(path)
+func removePath(root *os.Root, path string) error {
+	err := root.RemoveAll(path)
 	if os.IsNotExist(err) {
 		return nil
 	}
 	return err
 }
 
-func writeFile(ctx context.Context, path string, f archives.FileInfo) error {
+func writeFile(ctx context.Context, root *os.Root, path string, f archives.FileInfo) error {
 	r, err := f.Open()
 	if err != nil {
 		return err
 	}
 	defer r.Close()
 
-	w, err := os.Create(path)
+	w, err := root.Create(path)
 	if err != nil {
 		return err
 	}
@@ -299,20 +314,20 @@ func writeFile(ctx context.Context, path string, f archives.FileInfo) error {
 	return err
 }
 
-func writeSymlink(_ context.Context, path string, f archives.FileInfo) error {
+func writeSymlink(_ context.Context, root *os.Root, path string, f archives.FileInfo) error {
 	if f.LinkTarget == "" {
 		return errors.Errorf("symlink target is empty for %s", f.Name())
 	}
 
-	_, err := os.Lstat(path)
+	_, err := root.Lstat(path)
 	if err == nil {
-		err = os.Remove(path)
+		err = root.Remove(path)
 		if err != nil {
 			return err
 		}
 	}
 
-	return os.Symlink(f.LinkTarget, path)
+	return root.Symlink(f.LinkTarget, path)
 }
 
 type reader struct {
