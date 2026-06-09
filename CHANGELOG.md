@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.14.0 (2026/06/10)
+
+* Migrate github.com/docker/docker to github.com/moby/moby by @crazy-max in #451
+* Fix symlink traversal during blob extraction by @crazy-max in #461
+* Bump go.podman.io/image/v5 to 5.40.0 in #451
+* Bump golang.org/x/sync to 0.21.0 in #456
+* Bump golang.org/x/sys to 0.46.0 in #447 #455
+
+**Full Changelog**: [`v0.13.0...v0.14.0`](https://github.com/crazy-max/undock/compare/v0.13.0...v0.14.0)
+
 ## 0.13.0 (2026/04/24)
 
 * Use backoff for image copy retries on Windows by @crazy-max in #436
