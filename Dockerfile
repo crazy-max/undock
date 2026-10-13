@@ -64,7 +64,7 @@ FROM binary-$TARGETOS AS binary
 # enable scanning for this stage
 ARG BUILDKIT_SBOM_SCAN_STAGE=true
 
-FROM --platform=$BUILDPLATFORM alpine:${ALPINE_VERSION} AS build-artifact
+FROM --platform=$BUILDPLATFORM registry.alpinelinux.org/img/alpine:${ALPINE_VERSION} AS build-artifact
 RUN apk add --no-cache bash tar zip
 WORKDIR /work
 ARG TARGETOS
@@ -101,7 +101,7 @@ EOT
 FROM scratch AS release
 COPY --link --from=releaser /out /
 
-FROM alpine:${ALPINE_VERSION}
+FROM registry.alpinelinux.org/img/alpine:${ALPINE_VERSION}
 RUN apk --update --no-cache add ca-certificates openssl
 COPY --from=build /usr/bin/undock /usr/local/bin/undock
 ENV UNDOCK_CACHE_DIR="/var/cache/undock"
