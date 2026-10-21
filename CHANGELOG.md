@@ -7,6 +7,7 @@ Certificate verification now rejects chains containing eight revoked eMudhra
 intermediate certificates whose private keys were compromised.
 
 The blocked intermediates are:
+
 * Domain-validated TLS: `EM DV TLS CA - G3B` and `EM DV TLS CA - G3C`
 * Organization-validated TLS: `EM OV TLS CA - G3B` and `EM OV TLS CA - G3C`
 * Extended-validation TLS: `EM EV TLS CA - G3B` and `EM EV TLS CA - G3C`
