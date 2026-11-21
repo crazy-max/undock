@@ -12,7 +12,6 @@ import (
 
 	"github.com/containerd/platforms"
 	digest "github.com/opencontainers/go-digest"
-	specs "github.com/opencontainers/image-spec/specs-go"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -206,10 +205,10 @@ func writeManifestBlobWithDescriptor(t *testing.T, cachedir string, layers []oci
 
 	configDesc := writeOCIObject(t, cachedir, []byte(`{}`), ocispecs.MediaTypeImageConfig)
 	payload, err := json.Marshal(ocispecs.Manifest{
-		Versioned: specs.Versioned{SchemaVersion: 2},
-		MediaType: ocispecs.MediaTypeImageManifest,
-		Config:    configDesc,
-		Layers:    layers,
+		SchemaVersion: 2,
+		MediaType:     ocispecs.MediaTypeImageManifest,
+		Config:        configDesc,
+		Layers:        layers,
 	})
 	require.NoError(t, err)
 
@@ -220,9 +219,9 @@ func writeIndexBlob(t *testing.T, manifests []ocispecs.Descriptor) []byte {
 	t.Helper()
 
 	payload, err := json.Marshal(ocispecs.Index{
-		Versioned: specs.Versioned{SchemaVersion: 2},
-		MediaType: ocispecs.MediaTypeImageIndex,
-		Manifests: manifests,
+		SchemaVersion: 2,
+		MediaType:     ocispecs.MediaTypeImageIndex,
+		Manifests:     manifests,
 	})
 	require.NoError(t, err)
 

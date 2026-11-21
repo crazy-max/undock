@@ -5,6 +5,7 @@ ARG XX_VERSION="1.10.0"
 ARG ALPINE_VERSION="3.24"
 ARG GOLANGCI_LINT_VERSION="v2.15.0"
 ARG GOLANGCI_FROM_SOURCE="true"
+ARG GOPLS_ANALYZERS_VERSION="v0.3.0"
 
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
 
@@ -28,9 +29,29 @@ COPY --from=golangci-build /out/golangci-lint golangci-lint
 FROM golangci-binary-${GOLANGCI_FROM_SOURCE} AS golangci-binary
 
 FROM base AS lint
+ARG TARGETNAME
 ARG TARGETPLATFORM
 RUN --mount=type=bind,target=. \
-    --mount=type=cache,target=/root/.cache,id=lint-cache-$TARGETPLATFORM \
+    --mount=type=cache,target=/root/.cache,id=lint-cache-${TARGETNAME}-${TARGETPLATFORM} \
     --mount=from=golangci-binary,source=/golangci-lint,target=/usr/bin/golangci-lint \
   xx-go --wrap && \
   golangci-lint run ./...
+
+FROM base AS gopls-analyzers
+ARG GOPLS_ANALYZERS_VERSION
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/ \
+  GOBIN=/out go install github.com/crazy-max/gopls-analyzers/cmd/gopls-analyzers@${GOPLS_ANALYZERS_VERSION}
+
+FROM base AS gopls-analyze
+ENV GOFLAGS="-buildvcs=false -mod=vendor -tags=containers_image_openpgp,exclude_graphdriver_btrfs,exclude_graphdriver_devicemapper"
+ARG TARGETNAME
+ARG TARGETPLATFORM
+RUN --mount=target=. \
+  --mount=target=/root/.cache,type=cache,id=gopls-cache-${TARGETNAME}-${TARGETPLATFORM} \
+  --mount=target=/usr/bin/gopls-analyzers,from=gopls-analyzers,source=/out/gopls-analyzers <<EOF
+  set -ex
+  xx-go --wrap
+  gopls-analyzers -list-analyzers
+  go vet -vettool=/usr/bin/gopls-analyzers -exclude-generated ./...
+EOF
