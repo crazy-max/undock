@@ -8,7 +8,6 @@ Choose the archive matching the destination platform:
 * [`undock_{{ latest_stable_tag | trim('v') }}_darwin_amd64.tar.gz`]({{ config.repo_url }}/releases/download/{{ latest_stable_tag }}/undock_{{ latest_stable_tag | trim('v') }}_darwin_amd64.tar.gz)
 * [`undock_{{ latest_stable_tag | trim('v') }}_linux_amd64.tar.gz`]({{ config.repo_url }}/releases/download/{{ latest_stable_tag }}/undock_{{ latest_stable_tag | trim('v') }}_linux_amd64.tar.gz)
 * [`undock_{{ latest_stable_tag | trim('v') }}_linux_arm64.tar.gz`]({{ config.repo_url }}/releases/download/{{ latest_stable_tag }}/undock_{{ latest_stable_tag | trim('v') }}_linux_arm64.tar.gz)
-* [`undock_{{ latest_stable_tag | trim('v') }}_linux_armv5.tar.gz`]({{ config.repo_url }}/releases/download/{{ latest_stable_tag }}/undock_{{ latest_stable_tag | trim('v') }}_linux_armv5.tar.gz)
 * [`undock_{{ latest_stable_tag | trim('v') }}_linux_armv6.tar.gz`]({{ config.repo_url }}/releases/download/{{ latest_stable_tag }}/undock_{{ latest_stable_tag | trim('v') }}_linux_armv6.tar.gz)
 * [`undock_{{ latest_stable_tag | trim('v') }}_linux_armv7.tar.gz`]({{ config.repo_url }}/releases/download/{{ latest_stable_tag }}/undock_{{ latest_stable_tag | trim('v') }}_linux_armv7.tar.gz)
 * [`undock_{{ latest_stable_tag | trim('v') }}_linux_ppc64le.tar.gz`]({{ config.repo_url }}/releases/download/{{ latest_stable_tag }}/undock_{{ latest_stable_tag | trim('v') }}_linux_ppc64le.tar.gz)
