@@ -198,7 +198,7 @@ func whiteoutTarget(filename string) (target string, opaque bool, ok bool) {
 }
 
 func shouldSkipReservedWhiteoutPath(filename string) bool {
-	for _, segment := range strings.Split(filename, "/") {
+	for segment := range strings.SplitSeq(filename, "/") {
 		switch {
 		case segment == whiteoutOpaqueDir:
 			return false

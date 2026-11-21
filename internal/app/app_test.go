@@ -12,7 +12,6 @@ import (
 	"github.com/containerd/platforms"
 	"github.com/crazy-max/undock/internal/config"
 	digest "github.com/opencontainers/go-digest"
-	specs "github.com/opencontainers/image-spec/specs-go"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -145,9 +144,9 @@ func createOCIImageLayout(t *testing.T, dir string, platform ocispecs.Platform, 
 	manifestDesc.Platform = &platform
 
 	indexPayload, err := json.Marshal(ocispecs.Index{
-		Versioned: specs.Versioned{SchemaVersion: 2},
-		MediaType: ocispecs.MediaTypeImageIndex,
-		Manifests: []ocispecs.Descriptor{manifestDesc},
+		SchemaVersion: 2,
+		MediaType:     ocispecs.MediaTypeImageIndex,
+		Manifests:     []ocispecs.Descriptor{manifestDesc},
 	})
 	require.NoError(t, err)
 
@@ -181,10 +180,10 @@ func marshalManifest(t *testing.T, dir string, config ocispecs.Descriptor, layer
 	t.Helper()
 
 	payload, err := json.Marshal(ocispecs.Manifest{
-		Versioned: specs.Versioned{SchemaVersion: 2},
-		MediaType: ocispecs.MediaTypeImageManifest,
-		Config:    config,
-		Layers:    layers,
+		SchemaVersion: 2,
+		MediaType:     ocispecs.MediaTypeImageManifest,
+		Config:        config,
+		Layers:        layers,
 	})
 	require.NoError(t, err)
 
