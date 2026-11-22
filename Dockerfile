@@ -31,21 +31,6 @@ RUN --mount=target=.,rw <<EOT
   echo "$version" | tee /tmp/.version
 EOT
 
-FROM base AS test
-ENV CGO_ENABLED=1
-ARG BUILDTAGS
-RUN apk add --no-cache gcc linux-headers musl-dev
-RUN --mount=type=bind,target=. \
-    --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build <<EOT
-  set -ex
-  go test -v -tags "$BUILDTAGS" -coverprofile=/tmp/coverage.txt -covermode=atomic -race ./...
-  go tool cover -func=/tmp/coverage.txt
-EOT
-
-FROM scratch AS test-coverage
-COPY --from=test /tmp/coverage.txt /coverage.txt
-
 FROM base AS build
 ARG BUILDTAGS
 ARG TARGETPLATFORM
@@ -58,6 +43,21 @@ RUN --mount=type=bind,target=. \
   xx-verify --static /usr/bin/undock
 EOT
 
+FROM base AS test
+ENV CGO_ENABLED=1
+ARG BUILDTAGS
+RUN apk add --no-cache gcc linux-headers musl-dev
+RUN --mount=type=bind,target=. \
+    --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build <<EOT
+  set -ex
+  go tool gotestsum --format=standard-verbose --packages=./... -- -parallel=4 -tags "$BUILDTAGS" -coverprofile=/tmp/coverage.txt -covermode=atomic -race -timeout=10m
+  go tool cover -func=/tmp/coverage.txt
+EOT
+
+FROM scratch AS test-coverage
+COPY --from=test /tmp/coverage.txt /coverage.txt
+
 FROM base AS test-integration
 ENV CGO_ENABLED=1
 ARG BUILDTAGS
@@ -65,7 +65,7 @@ ENV TEST_BUILDTAGS="$BUILDTAGS"
 RUN apk add --no-cache docker-cli gcc linux-headers musl-dev
 COPY . .
 COPY --from=build /usr/bin/undock /usr/local/bin/undock
-CMD ["sh", "-c", "exec go test -tags \"integration $TEST_BUILDTAGS\" -count=1 -race -v -timeout=10m -run \"${TEST_RUN:-.}\" -coverpkg=./internal/...,./pkg/... -coverprofile=/coverage/coverage.txt ./test/integration"]
+CMD ["sh", "-c", "exec go tool gotestsum --format=standard-verbose --jsonfile=/testreports/go-test-report.json --junitfile=/testreports/junit-report.xml --packages=./test/integration -- -tags \"integration $TEST_BUILDTAGS\" -count=1 -race -timeout=10m -run \"${TEST_RUN:-.}\" -coverpkg=./internal/...,./pkg/... -coverprofile=/testreports/coverage.txt -covermode=atomic"]
 
 FROM scratch AS binary-unix
 COPY --link --from=build /usr/bin/undock /
