@@ -10,6 +10,7 @@ Choose the archive matching the destination platform:
 * [`undock_{{ latest_stable_tag | trim('v') }}_linux_arm64.tar.gz`]({{ config.repo_url }}/releases/download/{{ latest_stable_tag }}/undock_{{ latest_stable_tag | trim('v') }}_linux_arm64.tar.gz)
 * [`undock_{{ latest_stable_tag | trim('v') }}_linux_armv6.tar.gz`]({{ config.repo_url }}/releases/download/{{ latest_stable_tag }}/undock_{{ latest_stable_tag | trim('v') }}_linux_armv6.tar.gz)
 * [`undock_{{ latest_stable_tag | trim('v') }}_linux_armv7.tar.gz`]({{ config.repo_url }}/releases/download/{{ latest_stable_tag }}/undock_{{ latest_stable_tag | trim('v') }}_linux_armv7.tar.gz)
+* [`undock_{{ latest_stable_tag | trim('v') }}_linux_loong64.tar.gz`]({{ config.repo_url }}/releases/download/{{ latest_stable_tag }}/undock_{{ latest_stable_tag | trim('v') }}_linux_loong64.tar.gz)
 * [`undock_{{ latest_stable_tag | trim('v') }}_linux_ppc64le.tar.gz`]({{ config.repo_url }}/releases/download/{{ latest_stable_tag }}/undock_{{ latest_stable_tag | trim('v') }}_linux_ppc64le.tar.gz)
 * [`undock_{{ latest_stable_tag | trim('v') }}_linux_riscv64.tar.gz`]({{ config.repo_url }}/releases/download/{{ latest_stable_tag }}/undock_{{ latest_stable_tag | trim('v') }}_linux_riscv64.tar.gz)
 * [`undock_{{ latest_stable_tag | trim('v') }}_linux_s390x.tar.gz`]({{ config.repo_url }}/releases/download/{{ latest_stable_tag }}/undock_{{ latest_stable_tag | trim('v') }}_linux_s390x.tar.gz)
