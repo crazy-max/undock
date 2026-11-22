@@ -205,7 +205,7 @@ jobs:
             runner: ubuntu-26.04
           -
             platform: linux-arm64
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-26.04-arm
           -
             platform: windows-amd64
             runner: windows-2025
