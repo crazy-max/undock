@@ -52,6 +52,15 @@ RUN --mount=type=bind,target=. \
   xx-verify --static /usr/bin/undock
 EOT
 
+FROM base AS test-integration
+ENV CGO_ENABLED=1
+ARG BUILDTAGS
+ENV TEST_BUILDTAGS="$BUILDTAGS"
+RUN apk add --no-cache docker-cli gcc linux-headers musl-dev
+COPY . .
+COPY --from=build /usr/bin/undock /usr/local/bin/undock
+CMD ["sh", "-c", "exec go test -tags \"integration $TEST_BUILDTAGS\" -count=1 -race -v -timeout=10m -run \"${TEST_RUN:-.}\" -coverpkg=./internal/...,./pkg/... -coverprofile=/coverage/coverage.txt ./test/integration"]
+
 FROM scratch AS binary-unix
 COPY --link --from=build /usr/bin/undock /
 
