@@ -60,5 +60,8 @@
       "commitMessageTopic": "{{{depName}}}",
       "commitMessageExtra": "from {{{replace '^v' '' currentValue}}} to {{{replace '^v' '' newValue}}}"
     }
+  ],
+  "ignoreDeps": [
+    "github.com/google/go-containerregistry"
   ]
 }
