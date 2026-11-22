@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/cenkalti/backoff/v5"
+	"github.com/cenkalti/backoff/v7"
 	"github.com/pkg/errors"
 	"go.podman.io/image/v5/copy"
 	"go.podman.io/image/v5/signature"
