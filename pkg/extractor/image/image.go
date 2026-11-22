@@ -142,6 +142,10 @@ func (c *Client) extractCachedSource(manblob []byte, cachedir string) error {
 	}
 
 	eg, _ := errgroup.WithContext(c.ctx)
+	if c.opts.Wrap {
+		// Shared paths must be replaced in manifest order, never concurrently.
+		eg.SetLimit(1)
+	}
 	for _, me := range mans {
 		func(me manifestEntry) {
 			eg.Go(func() error {

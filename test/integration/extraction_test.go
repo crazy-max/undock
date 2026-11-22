@@ -46,10 +46,9 @@ func TestRegistryExtraction(t *testing.T) {
 			all:  true,
 		},
 		{
-			name: "wrap",
-			all:  true,
-			wrap: true,
-			// Platforms extract concurrently; only merge disjoint files here.
+			name:     "wrap",
+			all:      true,
+			wrap:     true,
 			includes: []string{"/fixture/amd64.txt", "/fixture/arm64.txt"},
 		},
 		{
