@@ -17,6 +17,7 @@ linters:
     - gocritic
     - gosec
     - govet
+    - importas
     - ineffassign
     - makezero
     - misspell
@@ -62,6 +63,12 @@ linters:
       enable:
         - nilness
         - unusedwrite
+    importas:
+      alias:
+        - pkg: github.com/opencontainers/image-spec/specs-go/v1
+          alias: ocispecs
+        - pkg: github.com/opencontainers/go-digest
+          alias: digest
     testifylint:
       disable:
         - empty
