@@ -6,6 +6,7 @@ require (
 	github.com/alecthomas/kong v1.16.1
 	github.com/cenkalti/backoff/v5 v5.0.3
 	github.com/containerd/platforms v0.2.1
+	github.com/google/go-containerregistry v0.21.6
 	github.com/mholt/archives v0.1.5
 	github.com/moby/moby/client v0.6.1
 	github.com/opencontainers/go-digest v1.0.0
@@ -53,7 +54,6 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/google/go-containerregistry v0.21.6 // indirect
 	github.com/google/go-intervals v0.0.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect

@@ -1,0 +1,28 @@
+services:
+  registry:
+    image: registry:3
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5000/v2/"]
+      interval: 1s
+      timeout: 5s
+      retries: 30
+
+  tests:
+    build:
+      context: ..
+      target: test-integration
+    environment:
+      TEST_REGISTRY: http://registry:5000
+      TEST_DOCKER: "1"
+      TEST_PUBLIC_REGISTRY: ${TEST_PUBLIC_REGISTRY:-0}
+      TEST_RUN: ${TEST_RUN:-.}
+    depends_on:
+      registry:
+        condition: service_healthy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../bin/coverage/integration:/coverage
+      - go-cache:/root/.cache/go-build
+
+volumes:
+  go-cache:

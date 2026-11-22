@@ -20,6 +20,7 @@ env:
   GHCR_SLUG: ghcr.io/${{ github.repository }}
   DESTDIR: ./bin
   DOCKER_BUILD_SUMMARY: false
+  GO_VERSION: "1.27"
 
 jobs:
   prepare:
@@ -72,36 +73,10 @@ jobs:
           set: |
             *.platform=${{ matrix.platforms }}
 
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      -
-        name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-      -
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
-      -
-        name: Test
-        uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
-        with:
-          source: .
-          targets: test
-          pull: true
-      -
-        name: Upload coverage
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
-        with:
-          directory: ${{ env.DESTDIR }}/coverage
-          token: ${{ secrets.CODECOV_TOKEN }}
-
   artifact:
     runs-on: ubuntu-latest
     needs:
       - prepare
-      - validate
     strategy:
       fail-fast: false
       matrix:
@@ -155,13 +130,141 @@ jobs:
           path: ${{ env.DESTDIR }}
           if-no-files-found: error
 
+  test-unit:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      -
+        name: Test
+        uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
+        with:
+          source: .
+          targets: test
+          pull: true
+      -
+        name: Upload coverage
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          directory: ${{ env.DESTDIR }}/coverage
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  test-integration:
+    runs-on: ubuntu-latest
+    env:
+      TEST_PUBLIC_REGISTRY: "1"
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      -
+        name: Integration tests
+        run: docker compose -f test/compose.yaml run --build --rm tests
+      -
+        name: Upload coverage
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: bin/coverage/integration/coverage.txt
+          flags: integration
+          token: ${{ secrets.CODECOV_TOKEN }}
+      -
+        name: Logs
+        if: always()
+        run: docker compose -f test/compose.yaml logs
+      -
+        name: Cleanup
+        if: always()
+        run: docker compose -f test/compose.yaml down --volumes --remove-orphans
+
+  test-native:
+    runs-on: ${{ matrix.runner }}
+    name: test-native (${{ matrix.platform }})
+    needs:
+      - artifact
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          -
+            platform: darwin-amd64
+            runner: macos-26-intel
+          -
+            platform: darwin-arm64
+            runner: macos-26
+          -
+            platform: linux-amd64
+            runner: ubuntu-latest
+          -
+            platform: linux-arm64
+            runner: ubuntu-24.04-arm
+          -
+            platform: windows-amd64
+            runner: windows-latest
+    env:
+      CGO_ENABLED: "0"
+      TEST_PUBLIC_REGISTRY: "1"
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      -
+        name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "${{ env.GO_VERSION }}"
+          check-latest: true
+      -
+        name: Download binary
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: ${{ env.DESTDIR }}
+          name: undock-${{ matrix.platform }}
+      -
+        name: Extract binary
+        shell: bash
+        run: |
+          mkdir -p ./bin/build
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            unzip -q ./bin/artifact/undock_*.zip -d ./bin/build
+            binary="$(cygpath -w "$PWD/bin/build/undock.exe")"
+          else
+            tar -xzf ./bin/artifact/undock_*.tar.gz -C ./bin/build
+            chmod +x ./bin/build/undock
+            binary="$PWD/bin/build/undock"
+          fi
+          echo "UNDOCK_BIN=$binary" >> "$GITHUB_ENV"
+      -
+        name: Integration tests
+        run: go test -mod=vendor -tags "integration containers_image_openpgp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper" -count=1 -v -timeout=10m "-coverpkg=./internal/...,./pkg/..." -covermode=atomic "-coverprofile=bin/coverage-native.txt" ./test/integration
+      -
+        name: Upload coverage
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: bin/coverage-native.txt
+          flags: native
+          name: native-${{ matrix.platform }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+
   release:
     runs-on: ubuntu-latest
     permissions:
       contents: write # required to create GitHub release
     needs:
       - artifact
-      - test
+      - test-unit
+      - test-integration
+      - test-native
     steps:
       -
         name: Checkout
@@ -205,7 +308,9 @@ jobs:
       packages: write # required to push to GHCR
     needs:
       - artifact
-      - test
+      - test-unit
+      - test-integration
+      - test-native
     steps:
       -
         name: Checkout
