@@ -27,7 +27,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       validate-includes: ${{ steps.validate.outputs.matrix }}
-      artifact-includes: ${{ steps.artifact.outputs.matrix }}
     steps:
       -
         name: Checkout
@@ -41,13 +40,6 @@ jobs:
           fields: platforms
         env:
           GOLANGCI_LINT_MULTIPLATFORM: 1
-      -
-        name: Artifact matrix
-        id: artifact
-        uses: docker/bake-action/subaction/matrix@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
-        with:
-          target: artifact-all
-          fields: platforms
 
   validate:
     runs-on: ubuntu-latest
@@ -73,61 +65,67 @@ jobs:
           set: |
             *.platform=${{ matrix.platforms }}
 
-  artifact:
-    runs-on: ubuntu-latest
+  artifacts:
+    uses: docker/github-builder/.github/workflows/bake.yml@a31d2311da4d55e21b978c1c52bab82ba97d51ee # v1.19.0
+    permissions:
+      contents: read # same as global permissions
+      id-token: write # for signing attestations with GitHub OIDC Token
+    with:
+      runner: ubuntu-26.04
+      target: artifact-all
+      output: local
+      artifact-name: undock
+      artifact-upload: true
+      sbom: true
+      sign: ${{ github.event_name != 'pull_request' }}
+      set: |
+        *.args.GIT_FETCH_HISTORY=1
+
+  artifacts-finalize:
+    runs-on: ubuntu-26.04
     needs:
-      - prepare
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJson(needs.prepare.outputs.artifact-includes) }}
+      - artifacts
     steps:
       -
-        name: Prepare
-        run: |
-          platform=${{ matrix.platforms }}
-          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
-      -
-        name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        name: Download artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          fetch-depth: 0
-      -
-        name: Set up QEMU
-        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
-      -
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
-      -
-        name: Build
-        uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
-        with:
-          source: .
-          targets: artifact
-          provenance: mode=max
-          sbom: true
-          pull: true
-          set: |
-            *.platform=${{ matrix.platforms }}
+          name: ${{ needs.artifacts.outputs.artifact-name }}
+          path: /tmp/buildx-output
       -
         name: Rename provenance and sbom
-        working-directory: ${{ env.DESTDIR }}/artifact
         run: |
-          binname=$(find . -name 'undock_*')
-          filename=$(basename "$binname" | sed -E 's/\.(tar\.gz|zip)$//')
-          mv "provenance.json" "${filename}.provenance.json"
-          mv "sbom-binary.spdx.json" "${filename}.sbom.json"
-          find . -name 'sbom*.json' -exec rm {} \;
+          for pdir in /tmp/buildx-output/*/; do
+            (
+              cd "$pdir"
+              binname=$(find . -name 'undock_*')
+              filename=$(basename "$binname" | sed -E 's/\.(tar\.gz|zip)$//')
+              mv "provenance.json" "${filename}.provenance.json"
+              mv "sbom-binary.spdx.json" "${filename}.sbom.json"
+              find . -name 'sbom*.json' -exec rm {} \;
+              if [ -f "provenance.sigstore.json" ]; then
+                mv "provenance.sigstore.json" "${filename}.sigstore.json"
+              fi
+            )
+          done
+          mkdir -p "${{ env.DESTDIR }}"
+          mv /tmp/buildx-output/**/* "${{ env.DESTDIR }}/"
       -
         name: List artifacts
+        working-directory: ${{ env.DESTDIR }}
         run: |
-          tree -nh ${{ env.DESTDIR }}
+          tree -nh .
       -
-        name: Upload artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        name: Check artifacts
+        working-directory: ${{ env.DESTDIR }}
+        run: |
+          find . -type f -exec file -e ascii -- {} +
+      -
+        name: Upload release binaries
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: undock-${{ env.PLATFORM_PAIR }}
-          path: ${{ env.DESTDIR }}
+          name: release
+          path: ${{ env.DESTDIR }}/*
           if-no-files-found: error
 
   test-unit:
@@ -191,7 +189,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     name: test-native (${{ matrix.platform }})
     needs:
-      - artifact
+      - artifacts-finalize
     strategy:
       fail-fast: false
       matrix:
@@ -228,18 +226,21 @@ jobs:
         name: Download binary
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          path: ${{ env.DESTDIR }}
-          name: undock-${{ matrix.platform }}
+          path: ${{ env.DESTDIR }}/artifact
+          name: release
       -
         name: Extract binary
         shell: bash
+        env:
+          PLATFORM_PAIR: ${{ matrix.platform }}
         run: |
           mkdir -p ./bin/build
+          platform=${PLATFORM_PAIR//-/_}
           if [ "$RUNNER_OS" = "Windows" ]; then
-            unzip -q ./bin/artifact/undock_*.zip -d ./bin/build
+            unzip -q ./bin/artifact/undock_*_${platform}.zip -d ./bin/build
             binary="$(cygpath -w "$PWD/bin/build/undock.exe")"
           else
-            tar -xzf ./bin/artifact/undock_*.tar.gz -C ./bin/build
+            tar -xzf ./bin/artifact/undock_*_${platform}.tar.gz -C ./bin/build
             chmod +x ./bin/build/undock
             binary="$PWD/bin/build/undock"
           fi
@@ -257,11 +258,11 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: write # required to create GitHub release
     needs:
-      - artifact
+      - artifacts-finalize
       - test-unit
       - test-integration
       - test-native
@@ -270,29 +271,29 @@ jobs:
         name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       -
-        name: Download artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        name: Download release binaries
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          path: ${{ env.DESTDIR }}
-          pattern: undock-*
-          merge-multiple: true
-      -
-        name: List artifacts
-        run: |
-          tree -nh ${{ env.DESTDIR }}
+          path: ${{ env.DESTDIR }}/artifact
+          name: release
       -
         name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       -
         name: Build
-        uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
+        uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7.5.0
         with:
           source: .
           targets: release
           provenance: false
       -
+        name: List artifacts
+        working-directory: ${{ env.DESTDIR }}/release
+        run: |
+          tree -nh .
+      -
         name: GitHub Release
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         if: startsWith(github.ref, 'refs/tags/')
         with:
           draft: true
@@ -301,84 +302,53 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  image-prepare:
+    runs-on: ubuntu-26.04
+    outputs:
+      repo-slugs: |
+        ${{ env.DOCKERHUB_SLUG }}
+        ${{ env.GHCR_SLUG }}
+    steps:
+      # FIXME: can't use env object in reusable workflow inputs: https://github.com/orgs/community/discussions/26671
+      - run: echo "Exposing env vars for reusable workflow"
+
   image:
-    runs-on: ubuntu-latest
+    uses: docker/github-builder/.github/workflows/bake.yml@a31d2311da4d55e21b978c1c52bab82ba97d51ee # v1.19.0
     permissions:
       contents: read # same as global permissions
       packages: write # required to push to GHCR
+      id-token: write # for signing attestations with GitHub OIDC Token
     needs:
-      - artifact
+      - image-prepare
+      - artifacts-finalize
       - test-unit
       - test-integration
       - test-native
-    steps:
-      -
-        name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-      -
-        name: Docker meta
-        id: meta
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
-        with:
-          images: |
-            ${{ env.DOCKERHUB_SLUG }}
-            ${{ env.GHCR_SLUG }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=ref,event=pr
-            type=edge
-          labels: |
-            org.opencontainers.image.title=Undock
-            org.opencontainers.image.description=Extract contents of a container image in a local folder
-            org.opencontainers.image.vendor=CrazyMax
-      -
-        name: Set up QEMU
-        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
-      -
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
-      -
-        name: Login to DockerHub
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
+    with:
+      runner: ubuntu-26.04
+      target: image-all
+      output: image
+      push: ${{ github.event_name != 'pull_request' }}
+      sbom: true
+      set-meta-labels: true
+      meta-images: |
+        ${{ needs.image-prepare.outputs.repo-slugs }}
+      meta-tags: |
+        type=semver,pattern={{version}}
+        type=semver,pattern={{major}}.{{minor}}
+        type=ref,event=pr
+        type=edge
+      meta-labels: |
+        org.opencontainers.image.title=Undock
+        org.opencontainers.image.description=Extract contents of a container image in a local folder
+        org.opencontainers.image.vendor=CrazyMax
+      set: |
+        *.args.GIT_FETCH_HISTORY=1
+    secrets:
+      registry-auths: |
+        - registry: docker.io
+          username: ${{ vars.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-      -
-        name: Login to GHCR
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
-        with:
-          registry: ghcr.io
+        - registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      -
-        name: Build
-        uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
-        with:
-          source: .
-          files: |
-            ./docker-bake.hcl
-            ${{ steps.meta.outputs.bake-file }}
-          targets: image-all
-          provenance: mode=max
-          sbom: true
-          pull: true
-          push: ${{ github.event_name != 'pull_request' }}
-      -
-        name: Check manifest
-        if: github.event_name != 'pull_request'
-        run: |
-          docker buildx imagetools inspect ${{ env.DOCKERHUB_SLUG }}:${{ steps.meta.outputs.version }}
-          docker buildx imagetools inspect ${{ env.GHCR_SLUG }}:${{ steps.meta.outputs.version }}
-      -
-        name: Inspect image
-        if: github.event_name != 'pull_request'
-        run: |
-          docker pull ${{ env.DOCKERHUB_SLUG }}:${{ steps.meta.outputs.version }}
-          docker image inspect ${{ env.DOCKERHUB_SLUG }}:${{ steps.meta.outputs.version }}
-          docker pull ${{ env.GHCR_SLUG }}:${{ steps.meta.outputs.version }}
-          docker image inspect ${{ env.GHCR_SLUG }}:${{ steps.meta.outputs.version }}
