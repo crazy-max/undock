@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.15.0 (2026/11/22)
+
+* Preserve hardlinks when extracting image layers by @crazy-max in #525
+* Preserve layer digests in the OCI cache by @crazy-max in #524
+* Fix concurrent file replacement during wrapped extraction by @crazy-max in #528
+* Add `linux/riscv64` images by @crazy-max in #522
+* Add `linux/loong64` artifacts and images by @crazy-max in #553
+* Drop `linux/arm/v5` artifacts by @crazy-max in #522
+* Run the container image from scratch by @crazy-max in #546
+* Go 1.27 by @crazy-max in #521
+* MkDocs Materials 9.8.2 in #542
+* Bump github.com/alecthomas/kong to 1.17.0 in #488 #545
+* Bump github.com/cenkalti/backoff to v7.0.3 in #551
+* Bump github.com/go-jose/go-jose/v4 to 4.1.6 in #530
+* Bump github.com/moby/moby/client to 0.6.3 in #499 #534
+* Bump github.com/sirupsen/logrus to 1.10.2 in #494
+* Bump github.com/stretchr/testify to 1.12.1 in #492
+* Bump go.opentelemetry.io/otel/trace to 1.47.0 in #531
+* Bump go.podman.io/image/v5 to 5.42.1 in #498 #547
+* Bump golang.org/x/sync to 0.25.0 in #497 #548
+* Bump golang.org/x/sys to 0.50.0 in #496 #549
+
+**Full Changelog**: [`v0.14.1...v0.15.0`](https://github.com/crazy-max/undock/compare/v0.14.1...v0.15.0)
+
 ## 0.14.1 (2026/10/21)
 
 This release is built with Go 1.26.10 to address [CVE-2026-111943](https://go.dev/issue/82345).
