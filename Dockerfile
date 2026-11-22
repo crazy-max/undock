@@ -13,7 +13,7 @@ FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS b
 COPY --from=xx / /
 ENV CGO_ENABLED=0
 ENV GOFLAGS="-mod=vendor"
-RUN apk add --no-cache file git
+RUN apk add --no-cache file git && apk upgrade --no-cache ca-certificates
 WORKDIR /src
 
 FROM base AS version
@@ -116,8 +116,12 @@ EOT
 FROM scratch AS release
 COPY --link --from=releaser /out /
 
-FROM alpine:${ALPINE_VERSION}
-RUN apk --update --no-cache add ca-certificates openssl
+FROM base AS rootfs
+RUN mkdir -p /rootfs/tmp /rootfs/var/tmp && chmod 1777 /rootfs/tmp /rootfs/var/tmp
+
+FROM scratch
+COPY --from=rootfs /rootfs /
+COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /usr/bin/undock /usr/local/bin/undock
 ENV UNDOCK_CACHE_DIR="/var/cache/undock"
-ENTRYPOINT [ "undock" ]
+ENTRYPOINT [ "/usr/local/bin/undock" ]
