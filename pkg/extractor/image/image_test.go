@@ -106,11 +106,29 @@ func TestExtractCachedSourceWrapsPlatforms(t *testing.T) {
 	cachedir := filepath.Join(root, "cache")
 	dest := filepath.Join(root, "dist")
 
-	amd64Layer := writeLayerBlob(t, cachedir, []layerEntry{{name: "amd64.txt", body: "amd64"}})
+	amd64Layer := writeLayerBlob(t, cachedir, []layerEntry{
+		{
+			name: "amd64.txt",
+			body: "amd64",
+		},
+		{
+			name: "metadata.env",
+			body: "ARCH=amd64\n",
+		},
+	})
 	_, amd64Desc := writeManifestBlobWithDescriptor(t, cachedir, []ocispecs.Descriptor{amd64Layer})
 	amd64Desc.Platform = &ocispecs.Platform{OS: "linux", Architecture: "amd64"}
 
-	arm64Layer := writeLayerBlob(t, cachedir, []layerEntry{{name: "arm64.txt", body: "arm64"}})
+	arm64Layer := writeLayerBlob(t, cachedir, []layerEntry{
+		{
+			name: "arm64.txt",
+			body: "arm64",
+		},
+		{
+			name: "metadata.env",
+			body: "ARCH=arm64\n",
+		},
+	})
 	_, arm64Desc := writeManifestBlobWithDescriptor(t, cachedir, []ocispecs.Descriptor{arm64Layer})
 	arm64Desc.Platform = &ocispecs.Platform{OS: "linux", Architecture: "arm64", Variant: "v8"}
 
@@ -128,6 +146,12 @@ func TestExtractCachedSourceWrapsPlatforms(t *testing.T) {
 	require.NoError(t, c.extractCachedSource(indexBlob, cachedir))
 	requireFileContent(t, filepath.Join(dest, "amd64.txt"), "amd64")
 	requireFileContent(t, filepath.Join(dest, "arm64.txt"), "arm64")
+	requireFileContent(t, filepath.Join(dest, "metadata.env"), "ARCH=arm64\n")
+
+	// Reversing the index must reverse which platform wins overlapping paths.
+	indexBlob = writeIndexBlob(t, []ocispecs.Descriptor{arm64Desc, amd64Desc})
+	require.NoError(t, c.extractCachedSource(indexBlob, cachedir))
+	requireFileContent(t, filepath.Join(dest, "metadata.env"), "ARCH=amd64\n")
 }
 
 func TestExtractCachedSourceFailsOnMissingManifestBlob(t *testing.T) {
