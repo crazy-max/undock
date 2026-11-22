@@ -129,34 +129,92 @@ jobs:
           if-no-files-found: error
 
   test-unit:
-    runs-on: ubuntu-26.04
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read # same as global permissions
+      id-token: write # for Codecov authentication
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-26.04
+          - macos-26
+          - macos-26-intel
+          - windows-2025
     steps:
+      -
+        name: Setup Git config
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
       -
         name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
       -
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        name: Set up Go
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: "${{ env.GO_VERSION }}"
+          check-latest: true
+      -
+        name: Prepare
+        shell: bash
+        run: |
+          testreportsDir=${{ env.DESTDIR }}/testreports/${{ github.job }}--${{ matrix.os }}
+          echo "TESTREPORTS_DIR=$testreportsDir" >> "$GITHUB_ENV"
+          mkdir -p "$testreportsDir"
       -
         name: Test
-        uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7.5.0
-        with:
-          source: .
-          targets: test
-          pull: true
+        shell: bash
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          go tool gotestsum \
+            --format=standard-verbose \
+            --jsonfile="${{ env.TESTREPORTS_DIR }}/go-test-report.json" \
+            --junitfile="${{ env.TESTREPORTS_DIR }}/junit-report.xml" \
+            --packages="./..." \
+            -- \
+              -mod=vendor -parallel=4 -race \
+              -tags "containers_image_openpgp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper" \
+              -coverprofile="${{ env.TESTREPORTS_DIR }}/coverage.txt" \
+              -covermode=atomic -timeout=10m
       -
         name: Upload coverage
+        if: always()
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
-          directory: ${{ env.DESTDIR }}/coverage
-          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: ${{ env.TESTREPORTS_DIR }}
+          env_vars: RUNNER_OS
+          flags: unit
+          use_oidc: true
+          disable_file_fixes: true # needed for Go language https://docs.codecov.com/docs/fixing-reports
+      -
+        name: Upload test results
+        if: always()
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          report_type: test_results
+          directory: ${{ env.TESTREPORTS_DIR }}
+          env_vars: RUNNER_OS
+          flags: unit
+          use_oidc: true
+          disable_file_fixes: true # needed for Go language https://docs.codecov.com/docs/fixing-reports
+      -
+        name: Generate annotations
+        if: always()
+        uses: crazy-max/.github/.github/actions/gotest-annotations@f91220cba053bd54299ba645a599ee8ed436f222 # v1.11.0
+        with:
+          directory: ${{ env.TESTREPORTS_DIR }}
 
   test-integration:
     runs-on: ubuntu-26.04
+    permissions:
+      contents: read # same as global permissions
+      id-token: write # for Codecov authentication
     env:
       TEST_PUBLIC_REGISTRY: "1"
+      TESTREPORTS_DIR: ./bin/testreports/integration
     steps:
       -
         name: Checkout
@@ -171,11 +229,29 @@ jobs:
         run: docker compose -f test/compose.yaml run --build --rm tests
       -
         name: Upload coverage
+        if: always()
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
-          files: bin/coverage/integration/coverage.txt
+          directory: ${{ env.TESTREPORTS_DIR }}
           flags: integration
-          token: ${{ secrets.CODECOV_TOKEN }}
+          use_oidc: true
+          disable_file_fixes: true # needed for Go language https://docs.codecov.com/docs/fixing-reports
+      -
+        name: Upload test results
+        if: always()
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          report_type: test_results
+          directory: ${{ env.TESTREPORTS_DIR }}
+          flags: integration
+          use_oidc: true
+          disable_file_fixes: true # needed for Go language https://docs.codecov.com/docs/fixing-reports
+      -
+        name: Generate annotations
+        if: always()
+        uses: crazy-max/.github/.github/actions/gotest-annotations@f91220cba053bd54299ba645a599ee8ed436f222 # v1.11.0
+        with:
+          directory: ${{ env.TESTREPORTS_DIR }}
       -
         name: Logs
         if: always()
@@ -188,6 +264,9 @@ jobs:
   test-native:
     runs-on: ${{ matrix.runner }}
     name: test-native (${{ matrix.platform }})
+    permissions:
+      contents: read # same as global permissions
+      id-token: write # for Codecov authentication
     needs:
       - artifacts-finalize
     strategy:
@@ -214,6 +293,11 @@ jobs:
       TEST_PUBLIC_REGISTRY: "1"
     steps:
       -
+        name: Setup Git config
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      -
         name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       -
@@ -222,6 +306,13 @@ jobs:
         with:
           go-version: "${{ env.GO_VERSION }}"
           check-latest: true
+      -
+        name: Prepare
+        shell: bash
+        run: |
+          testreportsDir=${{ env.DESTDIR }}/testreports/${{ github.job }}--${{ matrix.platform }}
+          echo "TESTREPORTS_DIR=$testreportsDir" >> "$GITHUB_ENV"
+          mkdir -p "$testreportsDir"
       -
         name: Download binary
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -247,15 +338,47 @@ jobs:
           echo "UNDOCK_BIN=$binary" >> "$GITHUB_ENV"
       -
         name: Integration tests
-        run: go test -mod=vendor -tags "integration containers_image_openpgp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper" -count=1 -v -timeout=10m "-coverpkg=./internal/...,./pkg/..." -covermode=atomic "-coverprofile=bin/coverage-native.txt" ./test/integration
+        shell: bash
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          go tool gotestsum \
+            --format=standard-verbose \
+            --jsonfile="${{ env.TESTREPORTS_DIR }}/go-test-report.json" \
+            --junitfile="${{ env.TESTREPORTS_DIR }}/junit-report.xml" \
+            --packages="./test/integration" \
+            -- \
+              -mod=vendor -count=1 -timeout=10m \
+              -tags "integration containers_image_openpgp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper" \
+              -coverpkg=./internal/...,./pkg/... \
+              -coverprofile="${{ env.TESTREPORTS_DIR }}/coverage.txt" -covermode=atomic
       -
         name: Upload coverage
+        if: always()
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
-          files: bin/coverage-native.txt
+          directory: ${{ env.TESTREPORTS_DIR }}
           flags: native
           name: native-${{ matrix.platform }}
-          token: ${{ secrets.CODECOV_TOKEN }}
+          use_oidc: true
+          disable_file_fixes: true # needed for Go language https://docs.codecov.com/docs/fixing-reports
+      -
+        name: Upload test results
+        if: always()
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          report_type: test_results
+          directory: ${{ env.TESTREPORTS_DIR }}
+          flags: native
+          name: native-${{ matrix.platform }}
+          use_oidc: true
+          disable_file_fixes: true # needed for Go language https://docs.codecov.com/docs/fixing-reports
+      -
+        name: Generate annotations
+        if: always()
+        uses: crazy-max/.github/.github/actions/gotest-annotations@f91220cba053bd54299ba645a599ee8ed436f222 # v1.11.0
+        with:
+          directory: ${{ env.TESTREPORTS_DIR }}
 
   release:
     runs-on: ubuntu-26.04

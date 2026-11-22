@@ -21,7 +21,7 @@ services:
         condition: service_healthy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ../bin/coverage/integration:/coverage
+      - ../bin/testreports/integration:/testreports
       - go-cache:/root/.cache/go-build
 
 volumes:
