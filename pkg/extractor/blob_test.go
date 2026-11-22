@@ -15,6 +15,102 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestExtractBlobHardlinkReplacesExistingFile(t *testing.T) {
+	dest := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dest, "link"), []byte("old"), 0o600))
+	layer := filepath.Join(t.TempDir(), "layer.tar")
+	writeTarFile(t, layer, []tarEntry{
+		{
+			name: "target",
+			body: "content",
+		},
+		{
+			name:     "link",
+			typeflag: tar.TypeLink,
+			linkname: "target",
+		},
+	})
+	require.NoError(t, ExtractBlob(layer, dest, ExtractBlobOpts{Context: t.Context(), Logger: zerolog.Nop()}))
+	target, err := os.Stat(filepath.Join(dest, "target"))
+	require.NoError(t, err)
+	link, err := os.Stat(filepath.Join(dest, "link"))
+	require.NoError(t, err)
+	require.True(t, os.SameFile(target, link))
+	content, err := os.ReadFile(filepath.Join(dest, "link"))
+	require.NoError(t, err)
+	require.Equal(t, "content", string(content))
+}
+
+func TestExtractBlobReplacesHardlinkedFileInLaterLayer(t *testing.T) {
+	dest := t.TempDir()
+	layer := filepath.Join(t.TempDir(), "layer.tar")
+	writeTarFile(t, layer, []tarEntry{
+		{
+			name: "target",
+			body: "original",
+		},
+		{
+			name:     "link",
+			typeflag: tar.TypeLink,
+			linkname: "target",
+		},
+	})
+	opts := ExtractBlobOpts{Context: t.Context(), Logger: zerolog.Nop()}
+	require.NoError(t, ExtractBlob(layer, dest, opts))
+	writeTarFile(t, layer, []tarEntry{
+		{
+			name: "target",
+			body: "replacement",
+		},
+	})
+	require.NoError(t, ExtractBlob(layer, dest, opts))
+	content, err := os.ReadFile(filepath.Join(dest, "link"))
+	require.NoError(t, err)
+	require.Equal(t, "original", string(content))
+	content, err = os.ReadFile(filepath.Join(dest, "target"))
+	require.NoError(t, err)
+	require.Equal(t, "replacement", string(content))
+}
+
+func TestExtractBlobHardlinkRequiresIncludedTarget(t *testing.T) {
+	dest := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dest, "link"), []byte("original"), 0o600))
+	layer := filepath.Join(t.TempDir(), "layer.tar")
+	writeTarFile(t, layer, []tarEntry{
+		{
+			name: "target",
+			body: "content",
+		},
+		{
+			name:     "link",
+			typeflag: tar.TypeLink,
+			linkname: "target",
+		},
+	})
+	err := ExtractBlob(layer, dest, ExtractBlobOpts{Context: t.Context(), Logger: zerolog.Nop(), Includes: []string{"/link"}})
+	require.ErrorContains(t, err, `hardlink "link" requires extracted target "target" (include the target when filtering)`)
+	content, err := os.ReadFile(filepath.Join(dest, "link"))
+	require.NoError(t, err)
+	require.Equal(t, "original", string(content))
+}
+
+func TestExtractBlobRejectsHardlinkTraversal(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "outside"), []byte("unchanged"), 0o600))
+	layer := filepath.Join(root, "layer.tar")
+	writeTarFile(t, layer, []tarEntry{
+		{
+			name:     "link",
+			typeflag: tar.TypeLink,
+			linkname: "../outside",
+		},
+	})
+	dest := filepath.Join(root, "dist")
+	err := ExtractBlob(layer, dest, ExtractBlobOpts{Context: t.Context(), Logger: zerolog.Nop()})
+	require.ErrorContains(t, err, "resolves outside destination")
+	require.NoFileExists(t, filepath.Join(dest, "link"))
+}
+
 func TestExtractBlobAppliesWhiteoutWithinIncludedTree(t *testing.T) {
 	root := t.TempDir()
 	dest := filepath.Join(root, "dist")

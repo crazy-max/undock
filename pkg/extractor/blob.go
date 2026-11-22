@@ -1,6 +1,7 @@
 package extractor
 
 import (
+	"archive/tar"
 	"context"
 	"io"
 	"io/fs"
@@ -114,7 +115,10 @@ func ExtractBlob(filename string, dest string, opts ExtractBlobOpts) error {
 			return err
 		}
 
+		header, isTar := f.Header.(*tar.Header)
 		switch {
+		case isTar && header.Typeflag == tar.TypeLink:
+			err = writeHardlink(root, outPath, f)
 		case f.IsDir():
 			err = root.MkdirAll(outPath, f.Mode().Perm())
 		case f.Mode().IsRegular():
@@ -299,6 +303,11 @@ func writeFile(ctx context.Context, root *os.Root, path string, f archives.FileI
 	}
 	defer r.Close()
 
+	// A replacement must not truncate other names sharing the same inode.
+	if err := root.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
 	w, err := root.Create(path)
 	if err != nil {
 		return err
@@ -312,6 +321,23 @@ func writeFile(ctx context.Context, root *os.Root, path string, f archives.FileI
 
 	_, err = io.Copy(w, readerContext(ctx, r))
 	return err
+}
+
+func writeHardlink(root *os.Root, path string, f archives.FileInfo) error {
+	if f.LinkTarget == "" {
+		return errors.Errorf("hardlink target is empty for %s", f.Name())
+	}
+	target, err := normalizeArchivePath(f.LinkTarget)
+	if err != nil {
+		return err
+	}
+	if _, err := root.Lstat(filepath.FromSlash(target)); err != nil {
+		return errors.Wrapf(err, "hardlink %q requires extracted target %q (include the target when filtering)", path, target)
+	}
+	if err := root.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return root.Link(filepath.FromSlash(target), path)
 }
 
 func writeSymlink(_ context.Context, root *os.Root, path string, f archives.FileInfo) error {
