@@ -149,8 +149,9 @@ func (c *Client) registriesConf() (string, string, error) {
 
 func (c *Client) dstCtx(_ string) (*types.SystemContext, error) {
 	return &types.SystemContext{
-		DirForceDecompress: true,
-		BlobInfoCacheDir:   filepath.Join(c.opts.CacheDir, "blobs"),
+		DirForceDecompress:          true,
+		BlobInfoCacheDir:            filepath.Join(c.opts.CacheDir, "blobs"),
+		OCIAcceptUncompressedLayers: true,
 	}, nil
 }
 
