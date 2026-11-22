@@ -148,7 +148,7 @@ jobs:
           pull: true
       -
         name: Upload coverage
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           directory: ${{ env.DESTDIR }}/coverage
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -171,7 +171,7 @@ jobs:
         run: docker compose -f test/compose.yaml run --build --rm tests
       -
         name: Upload coverage
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: bin/coverage/integration/coverage.txt
           flags: integration
@@ -250,7 +250,7 @@ jobs:
         run: go test -mod=vendor -tags "integration containers_image_openpgp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper" -count=1 -v -timeout=10m "-coverpkg=./internal/...,./pkg/..." -covermode=atomic "-coverprofile=bin/coverage-native.txt" ./test/integration
       -
         name: Upload coverage
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: bin/coverage-native.txt
           flags: native
