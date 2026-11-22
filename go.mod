@@ -4,7 +4,7 @@ go 1.27.0
 
 require (
 	github.com/alecthomas/kong v1.17.0
-	github.com/cenkalti/backoff/v5 v5.0.3
+	github.com/cenkalti/backoff/v7 v7.0.3
 	github.com/containerd/platforms v0.2.1
 	github.com/google/go-containerregistry v0.21.6
 	github.com/mholt/archives v0.1.5
