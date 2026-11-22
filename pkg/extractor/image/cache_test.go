@@ -56,6 +56,7 @@ func TestDstCtxForcesDecompression(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.True(t, sysCtx.DirForceDecompress)
+	assert.True(t, sysCtx.OCIAcceptUncompressedLayers)
 	assert.Equal(t, filepath.Join("cache", "root", "blobs"), sysCtx.BlobInfoCacheDir)
 }
 
