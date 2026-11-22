@@ -24,7 +24,7 @@ env:
 
 jobs:
   prepare:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       validate-includes: ${{ steps.validate.outputs.matrix }}
     steps:
@@ -42,7 +42,7 @@ jobs:
           GOLANGCI_LINT_MULTIPLATFORM: 1
 
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs:
       - prepare
     strategy:
@@ -129,7 +129,7 @@ jobs:
           if-no-files-found: error
 
   test-unit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       -
         name: Checkout
@@ -154,7 +154,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-integration:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     env:
       TEST_PUBLIC_REGISTRY: "1"
     steps:
@@ -202,13 +202,13 @@ jobs:
             runner: macos-26
           -
             platform: linux-amd64
-            runner: ubuntu-latest
+            runner: ubuntu-26.04
           -
             platform: linux-arm64
             runner: ubuntu-24.04-arm
           -
             platform: windows-amd64
-            runner: windows-latest
+            runner: windows-2025
     env:
       CGO_ENABLED: "0"
       TEST_PUBLIC_REGISTRY: "1"
