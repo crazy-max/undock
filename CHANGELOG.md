@@ -5,6 +5,7 @@
 * Preserve hardlinks when extracting image layers by @crazy-max in #525
 * Preserve layer digests in the OCI cache by @crazy-max in #524
 * Fix concurrent file replacement during wrapped extraction by @crazy-max in #528
+* Images and artifacts are now built and signed using [Docker Github Builder](https://github.com/docker/github-builder) by @crazy-max in #527
 * Add `linux/riscv64` images by @crazy-max in #522
 * Add `linux/loong64` artifacts and images by @crazy-max in #553
 * Drop `linux/arm/v5` artifacts by @crazy-max in #522
